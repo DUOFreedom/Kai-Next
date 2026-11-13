@@ -39,7 +39,10 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: platform-tools
+          api-level: 34
+          ndk-version: r27b
+          build-tools: 34.0.0
+          cmake-version: '3.22.1'
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -68,17 +71,11 @@ jobs:
       - name: Run spotlessApply
         run: ./gradlew spotlessApply --no-daemon --stacktrace
 
-      - name: Run updateScreenshots
-        run: ./gradlew :screenshotTests:updateScreenshots --no-daemon --stacktrace
+      - name: Run Android lint
+        run: ./gradlew :composeApp:lintAndroidMain --no-daemon --stacktrace
 
-      - name: Install cwebp
-        run: sudo apt-get update && sudo apt-get install -y webp
-
-      - name: Convert site images to WebP
-        run: ./scripts/convert-site-images-to-webp.sh
-
-      - name: Run desktop tests
-        run: ./gradlew :composeApp:desktopTest --no-daemon --stacktrace
+      - name: Run unit tests
+        run: ./gradlew :composeApp:testDebugUnitTest --no-daemon --stacktrace
 
       - name: Check for changes
         id: changes
@@ -94,11 +91,9 @@ jobs:
           steps.changes.outputs.has_changes == 'true' &&
           steps.fork-check.outputs.is_fork == 'true'
         run: |
-          echo "::error::This PR from a fork requires formatting or screenshot updates."
-          echo "Please run the following commands locally and push the changes:"
+          echo "::error::This PR from a fork requires formatting updates."
+          echo "Please run the following command locally and push the changes:"
           echo "  ./gradlew spotlessApply"
-          echo "  ./gradlew :screenshotTests:updateScreenshots"
-          echo "  ./scripts/convert-site-images-to-webp.sh"
           exit 1
 
       - name: Commit and push changes
@@ -109,5 +104,5 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add -A
-          git commit -m "Auto-fix: spotlessApply and updateScreenshots [skip ci]"
+          git commit -m "Auto-fix: spotlessApply [skip ci]"
           git push
