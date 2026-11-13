@@ -59,4 +59,29 @@ nav:
     - Token Usage: features/token-usage.md
     - Thinking Effort: features/thinking-effort.md
     - Device Control: features/device-control.md
+  - Knowledge:
+    - Free Tier:
+      - Overview: knowledge/free-tier/index.md
+      - Log: knowledge/free-tier/log.md
+      - Ollama Cloud: knowledge/free-tier/ollama-cloud.md
+      - OpenRouter: knowledge/free-tier/openrouter.md
+      - Refresh Playbook: knowledge/free-tier/refresh-playbook.md
+    - LiteRT:
+      - Overview: knowledge/litert/index.md
+      - Log: knowledge/litert/log.md
+      - Models: knowledge/litert/models.md
+      - Pin Policy: knowledge/litert/pin-policy.md
+      - Refresh Playbook: knowledge/litert/refresh-playbook.md
+    - Model Catalog:
+      - Overview: knowledge/model-catalog/index.md
+      - Arena Scores: knowledge/model-catalog/arena-scores.md
+      - Log: knowledge/model-catalog/log.md
+      - Matching Policy: knowledge/model-catalog/matching-policy.md
+      - Refresh Playbook: knowledge/model-catalog/refresh-playbook.md
+    - Popular MCP:
+      - Overview: knowledge/popular-mcp/index.md
+      - Log: knowledge/popular-mcp/log.md
+      - Refresh Playbook: knowledge/popular-mcp/refresh-playbook.md
+      - Selection Policy: knowledge/popular-mcp/selection-policy.md
+      - Servers: knowledge/popular-mcp/servers.md
   - Desktop Release Smoke Test: desktop-release-smoketest.md
