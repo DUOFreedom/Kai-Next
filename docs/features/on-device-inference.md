@@ -1,12 +1,12 @@
 # On-Device Inference (LiteRT)
 
-**Last verified:** 2026-10-21
+**Last verified:** 2026-11-18
 
-Kai can run AI models directly on the user's device using Google's LiteRT LM SDK. This enables fully offline, private inference with no API key, no internet connection, and no cost. Available on **Android**, **Desktop** (macOS, Linux, Windows), and **iOS**.
+Kai can run AI models directly on the user's device using Google's LiteRT LM SDK. This enables fully offline, private inference with no API key, no internet connection, and no cost. In this fork it is available on **Android** only — the iOS, desktop and web targets and their inference bridges are removed.
 
 ## How It Works
 
-Models are downloaded from HuggingFace's litert-community and stored locally on the device. When the user sends a message, the model runs entirely on-device using GPU acceleration (with CPU fallback where the platform supports it). The engine initializes on first use (~10 seconds) and stays loaded for 5 minutes of inactivity before automatically releasing memory.
+Models are downloaded from HuggingFace's litert-community and stored locally on the device. When the user sends a message, the model runs entirely on-device using GPU acceleration (with CPU fallback). The engine initializes on first use (~10 seconds) and stays loaded for 5 minutes of inactivity before automatically releasing memory.
 
 ### Download integrity
 
@@ -22,8 +22,8 @@ Bumping a catalog model means updating its pinned revision, digest, and size tog
 
 ## Available Models
 
-| Model | Size | GPU Memory (Android) | Default Context | Max Context | Tool calling |
-|-------|------|---------------------|-----------------|-------------|--------------|
+| Model | Size | GPU Memory | Default Context | Max Context | Tool calling |
+|-------|------|-----------|-----------------|-------------|--------------|
 | Gemma 4 E2B IT | 2.59 GB | 676 MB | 4K tokens | 32K tokens | ✅ reliable |
 | Gemma 4 E4B IT | 3.66 GB | 710 MB | 4K tokens | 32K tokens | ✅ reliable |
 | Gemma 4 12B IT | 6.88 GB | 4000 MB | 8K tokens | 32K tokens | ✅ reliable |
@@ -32,7 +32,7 @@ Bumping a catalog model means updating its pinned revision, digest, and size tog
 
 Models are `.litertlm` files from the [litert-community](https://huggingface.co/litert-community) organization on HuggingFace. Sizes are the exact byte counts recorded in the catalog, which are checked against the downloaded file.
 
-**Gemma 4 12B** is pinned to the revision published in September 2026, which adds vision and audio modalities and Multi-Token Prediction for speculative decoding. That build requires LiteRT-LM 0.17 or newer, which Android and Desktop ship; the iOS bridge is older, so this entry cannot load there — academic at 6.9 GB, which no phone was going to hold.
+**Gemma 4 12B** is pinned to the revision published in September 2026, which adds vision and audio modalities and Multi-Token Prediction for speculative decoding. That build requires LiteRT-LM 0.17 or newer; this app ships 0.18.1, so the requirement is met.
 
 **LFM2.5 1.2B Instruct** is the smallest catalog model that carries a real tool-calling chat template, so it is the on-device pick when tools matter and a Gemma won't fit. Two properties of the file shape its entry: the catalog takes the `_int4_gpu` build because it is the only one that lowers fully for the GPU delegate (the plain `_int4` leaves ops behind and then fails engine creation) while still running on CPU, which matters because initialization tries GPU first and falls back; and its export tops out at 4K tokens, so the context size is fixed rather than adjustable — the settings card shows the size without a slider.
 
@@ -42,7 +42,7 @@ The application uses **litert-lm's native function calling**: each exposed Kai t
 
 Two filters decide what the model actually receives.
 
-**The model file decides whether it gets tools at all.** Before building the tool list, Kai asks the `.litertlm` bundle what it declares about itself — a metadata read that needs no engine and no loaded weights. A bundle that declares no function-calling support carries no tool section in its chat template, and such a model does not politely ignore tools it was handed: it answers *instead* of calling them, inventing whatever the tool would have returned. Those models are given no tools and no tool guidance in the system prompt, which makes them plain chat models — which is what they are. A bundle that cannot answer (older metadata, or the iOS bridge, whose LiteRT-LM release predates the capability API) reports *unknown*, and unknown is treated as before: the allowlist is offered.
+**The model file decides whether it gets tools at all.** Before building the tool list, Kai asks the `.litertlm` bundle what it declares about itself — a metadata read that needs no engine and no loaded weights. A bundle that declares no function-calling support carries no tool section in its chat template, and such a model does not politely ignore tools it was handed: it answers *instead* of calling them, inventing whatever the tool would have returned. Those models are given no tools and no tool guidance in the system prompt, which makes them plain chat models — which is what they are. A bundle that cannot answer (older metadata) reports *unknown*, and unknown is treated as before: the allowlist is offered.
 
 **The allowlist then narrows what a tool-capable model sees**, because small Gemma models (2-4B params) struggle to emit valid function-call syntax for tools with many parameters or complex value types, and litert-lm's strict ANTLR parser crashes the call when the syntax is malformed.
 
@@ -52,7 +52,7 @@ The on-device tool allowlist currently exposes: `get_local_time`, `get_location_
 
 The system prompt for on-device runs is composed from its own local-chat variant — it contains only the sections a small Gemma can handle (soul + basic memory guidance + runtime Context block). Memory categories, scheduled tasks, Structured Learning guidance, and kai-ui sections are never composed in.
 
-Interactive UI mode is **not supported** on-device: the kai-ui component schema is too large and too structurally complex for 2-4B Gemma models to reliably produce valid kai-ui JSON. The "Start interactive mode" button in the chat empty-state is hidden when the primary service is on-device, and on-device services are also filtered out of the quick-switch service selector while Interactive Mode is active so a user already in Interactive Mode can't switch to them. Users who need interactive UI should switch to a remote service.
+Interactive UI mode is **not supported** on-device: the kai-ui component schema is too large and too structurally complex for 2-4B Gemma models to reliably produce valid kai-ui JSON. The "Start interactive mode" button in the chat empty-state is hidden when the primary service is on-device, and on-device services are filtered out of the interactive-mode service switcher (which only lists models capable of agentic flows) so a user already in Interactive Mode can't switch to them. Users who need interactive UI should switch to a remote service.
 
 See [system-prompts.md](system-prompts.md) for the full contract.
 
@@ -68,9 +68,7 @@ If the engine throws (e.g. the model does emit malformed tool-call syntax that t
 
 - **No image input** -- the on-device engine only accepts text messages. Some catalog bundles (Gemma 4 12B since its September 2026 revision) declare vision and audio modalities, and the capability read surfaces that, but nothing consumes it yet
 - **No dynamic UI** -- kai-ui prompts are skipped for on-device runs (the schema is too large for the native template parser)
-- **Not available on web** -- the WASM build returns no local engine. iOS uses a platform-specific LiteRT bridge rather than the Android/JVM AAR.
-- **Requires a 64-bit device (Android)** -- the LiteRT-LM AAR only ships `arm64-v8a` and `x86_64` native libraries. On pure 32-bit devices (armeabi-v7a), the LiteRT service card is hidden; the app still works with remote services.
-- **Requires AVX2 on x86_64 Linux** -- the LiteRT native binary is compiled with AVX2+ instructions, so older CPUs (e.g. Intel Ivy Bridge / 3rd-gen Core) would SIGILL on model load. On Linux desktop, the engine probes `/proc/cpuinfo` for the `avx2` flag and hides the LiteRT service card when missing. Remote services are unaffected.
+- **Requires a 64-bit device** -- the LiteRT-LM AAR only ships `arm64-v8a` and `x86_64` native libraries. When the device reports no 64-bit ABI the app creates no local engine, and the LiteRT service card is hidden; the app still works with remote services.
 
 ## Model Management
 
@@ -86,37 +84,33 @@ Users manage models through the LiteRT service card in Settings:
 - **Performance indicator** -- each model shows a Good/OK/Poor label based on total device RAM vs estimated resident memory at the selected context size. The estimate sums the model file size (proxy for resident weights after mmap/PLE), a per-model baseline for GPU/KV working memory, and a per-token KV cache cost that scales with context. Thresholds: Good >= 2.5x, OK >= 1.85x, Poor < 1.85x of total device RAM -- the extra headroom over 1x accounts for OS reservation and GPU-driver overhead. Custom imports use a size-based heuristic for the GPU baseline
 - **Free space** -- available device storage is shown below the model list
 
-On Android, downloads run in a foreground service with a notification so they continue when the app is backgrounded. The service is only started once the HTTP connection is established, so a pre-connection failure (e.g. offline) surfaces as an inline error without leaving a promised-but-unfulfilled foreground service. On Desktop, downloads run in a background coroutine. Import always copies into app storage (same pattern as Gallery / PocketPal); Kai cannot silently scan other apps' private model directories.
+Downloads run in a foreground service with a notification so they continue when the app is backgrounded. The service is only started once the HTTP connection is established, so a pre-connection failure (e.g. offline) surfaces as an inline error without leaving a promised-but-unfulfilled foreground service. Import always copies into app storage (same pattern as Gallery / PocketPal); Kai cannot silently scan other apps' private model directories.
 
 When the last LiteRT service instance is removed, all downloaded and imported models are automatically deleted.
 
 ## Engine Lifecycle
 
 1. **Lazy initialization** -- the engine loads only when the first message is sent
-2. **GPU-first** -- attempts GPU backend, falls back to CPU if unavailable (where the platform supports both)
-3. **Memory check (Android/JVM path)** -- refuses to load when available memory is below a fixed **512 MB** headroom floor (not model-size + headroom). Desktop skips the check and reports effectively unlimited available memory so the OS swap/cache path is trusted
+2. **GPU-first** -- attempts the GPU backend, falls back to CPU if unavailable
+3. **Memory check** -- refuses to load when available memory is below a fixed **512 MB** headroom floor (not model-size + headroom). Before measuring, any previously loaded engine is released and the GPU driver is given a beat to reclaim its buffers, so switching between models does not spuriously fail the check
 4. **Persistent across messages** -- stays loaded for the duration of the conversation
 5. **Inference timeout** -- individual inference calls are capped at 2 minutes
 6. **Auto-release** -- released after 5 minutes of inactivity to free memory (always re-armed, even on errors)
 7. **Status indicator** -- the chat shows "Initializing {model name}" with a pulsing dot during engine load
 8. **Stop during load** -- the native model load cannot be interrupted; pressing stop cancels the message, and the load finishes in the background without marking the engine as failed. A follow-up message waits for the in-flight load instead of starting a second one
 
-## Platform Differences
+## Platform Notes
 
-| Aspect | Android | Desktop | iOS |
-|--------|---------|---------|-----|
-| Model storage | `context.filesDir/litert_models` (catalog under `{id}/` with its digest marker alongside, imports under `imports/`) | `~/.kai/litert_models` (same layout) | App sandbox path via the iOS LiteRT bridge (same layout) |
-| Memory check | `ActivityManager.getMemoryInfo()` vs 512 MB floor | Skipped — desktop OSes manage memory via swap and cache eviction | Platform bridge |
-| Disk space | `StatFs.availableBytes` | `File.usableSpace` | Platform bridge |
-| Download notification | Foreground service with notification | No notification (no OS restriction) | Platform bridge |
-| Model import | FileKit file picker → stream-copy into app storage | Same | Same |
-| Runtime version | litert-lm 0.18.1 (Google Maven) | Same | LiteRT-LM 0.16.1 (Swift package) — behind Android/Desktop; newer Swift package tags exist but iOS has not been moved yet |
-| Capability probe | Reads the bundle's declared tool support, modalities and sampler defaults | Same | Unavailable — the Swift capability API at 0.16.1 exposes only speculative-decoding support, so the probe reports *unknown* and callers keep their defaults |
+- **Model storage** -- `context.filesDir/litert_models`, with catalog models under `{id}/` (digest marker alongside) and imports under `imports/`
+- **Memory and disk** -- available memory comes from `ActivityManager.getMemoryInfo()`; free space from `StatFs`
+- **Downloads** -- foreground service with a progress notification
+- **Runtime version** -- litert-lm 0.18.1 from Google Maven
 
 ## Fallback Behavior
 
 - LiteRT instances participate in the normal fallback chain
-- On unsupported platforms (web), LiteRT instances are silently skipped
+- When no local engine exists (a device without a 64-bit ABI), the LiteRT service is filtered out of the settings service list entirely, so it can't be selected
+- On-device models are only ever tried as the primary service, never as a fallback target — falling into one would silently start a heavy model load the user didn't ask for
 - Background tool runs (heartbeat and scheduled tasks) use an explicitly chosen instance when there is one, otherwise prefer remote services and fall back to on-device only when no remote is configured. The on-device fallback works at any context size, since the simple-tool allowlist has no schema-overhead penalty.
 
 ## Key Files
@@ -129,14 +123,10 @@ When the last LiteRT service instance is removed, all downloaded and imported mo
 | `docs/knowledge/litert/` | OKF bundle: pin policy, attested commit/digest/size snapshot, refresh playbook |
 | `composeApp/src/commonMain/.../inference/LocalModelImport.kt` | Import path helpers, custom model id/filename sanitization, synthetic metadata |
 | `composeApp/src/commonMain/.../inference/InferencePlatform.kt` | `expect` declarations for platform-specific operations |
-| `composeApp/src/commonMain/.../inference/LocalInferenceEngineProvider.kt` | `expect` factory, returns `null` on unsupported platforms |
-| `composeApp/src/jvmShared/.../inference/LiteRTInferenceEngine.kt` | Shared Android+Desktop implementation wrapping LiteRT LM SDK |
-| `composeApp/src/androidMain/.../inference/InferencePlatform.android.kt` | Android platform implementations (storage, memory, notifications) |
-| `composeApp/src/desktopMain/.../inference/InferencePlatform.jvm.kt` | Desktop platform implementations (storage, memory) |
-| `composeApp/src/iosMain/.../inference/IosLiteRTInferenceEngine.kt` | iOS LiteRT engine implementation |
-| `composeApp/src/iosMain/.../inference/LiteRTSwiftBridge.kt` | Kotlin side of the bridge to the LiteRT-LM Swift package |
-| `composeApp/src/iosMain/.../inference/InferencePlatform.ios.kt` | iOS platform implementations (storage, memory, disk space) |
-| `composeApp/src/iosMain/.../inference/LocalInferenceEngineProvider.ios.kt` | iOS factory wiring |
+| `composeApp/src/commonMain/.../inference/LocalInferenceEngineProvider.kt` | `expect` factory, returns `null` on a device with no 64-bit ABI |
+| `composeApp/src/jvmShared/.../inference/LiteRTInferenceEngine.kt` | The engine implementation wrapping the LiteRT LM SDK, behind the Android actual |
+| `composeApp/src/androidMain/.../inference/InferencePlatform.android.kt` | Android platform implementations (storage, memory, disk space, download notification) |
+| `composeApp/src/androidMain/.../inference/LocalInferenceEngineProvider.android.kt` | Android factory — creates the engine only when a 64-bit ABI is present |
 | `composeApp/src/androidMain/.../inference/ModelDownloadService.kt` | Android foreground service for background downloads |
 | `composeApp/src/commonMain/.../data/RemoteDataRepository.kt` | Inference dispatch, engine initialization status, local tool allowlist, and the declared-capability gate that withholds tools from models with no tool template |
 | `composeApp/src/commonMain/.../network/NetworkExceptions.kt` | Maps inference failures, including a failed integrity check, to user-facing errors |

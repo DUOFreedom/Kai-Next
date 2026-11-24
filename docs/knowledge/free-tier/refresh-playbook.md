@@ -43,7 +43,7 @@ generated: { by: human:simon, at: 2026-08-11T17:36:04Z }
 2. Show a short added/removed summary per service **before** writing.
 3. Update runtime sets in:
 
-   `composeApp/src/commonMain/kotlin/com/inspiredandroid/kai/data/FreeTierModels.kt`
+   `composeApp/src/commonMain/kotlin/com/kainext/duo/data/FreeTierModels.kt`
 
    Preserve file structure and comments; sets only.
 4. Update this bundle:
@@ -56,13 +56,13 @@ generated: { by: human:simon, at: 2026-08-11T17:36:04Z }
 
 ## 4. Verify
 
-1. `./gradlew :composeApp:compileKotlinDesktop`
-2. `./gradlew :composeApp:desktopTest --tests '*FreeTierModels*' --tests '*ModelTransformations*'`
+1. `./gradlew :composeApp:compileAndroidMain`
+2. `./gradlew :composeApp:testAndroidHostTest --tests '*ModelTransformations*'`
 3. `./gradlew spotlessApply`
-4. Update `FreeTierModelsTest.kt` only if fixture seed ids changed.
+4. Update `ModelTransformationsTest.kt` only if a fixture seed id used by the free-badge assertions changed.
 5. On green tests, set on both catalogs:
 
-   `verified: { by: process:desktopTest-FreeTierModels, at: <ISO-8601 UTC> }`
+   `verified: { by: process:testAndroidHostTest-ModelTransformations, at: <ISO-8601 UTC> }`
 
 # Hard rules
 

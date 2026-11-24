@@ -6,7 +6,7 @@ tags: [litert, on-device, integrity]
 status: stable
 stale_after: 2026-10-07
 generated: { by: process:update-litert-models, at: 2026-09-07T00:00:00Z }
-verified: { by: process:desktopTest-LocalModel, at: 2026-09-07T00:00:00Z }
+verified: { by: process:testAndroidHostTest-LocalModelCatalog, at: 2026-09-07T00:00:00Z }
 sources:
   - id: hf-e2b
     resource: https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm

@@ -6,7 +6,7 @@ tags: [mcp, popular-servers]
 status: stable
 stale_after: 2026-08-26
 generated: { by: process:update-popular-mcp-servers, at: 2026-08-12T20:49:34Z }
-verified: { by: process:desktopTest-PopularMcpServers, at: 2026-08-12T20:51:16Z }
+verified: { by: process:testAndroidHostTest-PopularMcpServers, at: 2026-08-12T20:51:16Z }
 sources:
   - id: selection-policy
     resource: /selection-policy.md

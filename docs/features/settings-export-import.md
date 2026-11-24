@@ -74,7 +74,7 @@ Users can back up and restore their Kai configuration and data (services, soul, 
 - `app_opens` (analytics counter)
 - `encryption_key` (security-sensitive)
 - Splinterlands posting keys (security-sensitive; must be re-entered after import)
-- `ui_scale` (platform-specific, desktop may differ from mobile)
+- `ui_scale` (device-specific display scaling)
 - Appearance and general preferences: `theme_mode`, `dynamic_ui_enabled`
 - Free-tier preferences: `free_mode`, `free_service_primary`
 - Notification reading (`notifications_enabled`, pending queue, store, sync state) — Android FOSS only

@@ -12,7 +12,7 @@ generated: { by: human:simon, at: 2026-08-12T19:56:19Z }
 - User runs `/update-model-catalog`
 - Arena Elo in Settings looks wrong or stale
 - [arena-scores.md](arena-scores.md) `stale_after` is today or in the past
-- Logcat / desktop logs show `ModelCatalog miss:` for a model users actually pick
+- Logcat shows `ModelCatalog miss:` for a model users actually pick
 
 # Preconditions
 
@@ -33,7 +33,7 @@ If the page is truncated or unparsable, stop and do not write.
 
 ## 2. Read the current catalog
 
-Read `composeApp/src/commonMain/kotlin/com/inspiredandroid/kai/data/ModelCatalog.kt`:
+Read `composeApp/src/commonMain/kotlin/com/kainext/duo/data/ModelCatalog.kt`:
 
 - `baseEntries` — do not rewrite metadata unless correcting an error or adding a new model
 - `arenaScores` — attested block (provider comments) + auto-fill block
@@ -58,12 +58,12 @@ Read `composeApp/src/commonMain/kotlin/com/inspiredandroid/kai/data/ModelCatalog
 
 ## 5. Verify
 
-1. `./gradlew :composeApp:compileKotlinDesktop`
-2. `./gradlew :composeApp:desktopTest --tests '*ModelCatalog*'`
+1. `./gradlew :composeApp:compileAndroidMain`
+2. `./gradlew :composeApp:testAndroidHostTest --tests '*ModelCatalog*'`
 3. `./gradlew spotlessApply`
 4. On green tests, set on [arena-scores.md](arena-scores.md):
 
-   `verified: { by: process:desktopTest-ModelCatalog, at: <ISO-8601 UTC> }`
+   `verified: { by: process:testAndroidHostTest-ModelCatalog, at: <ISO-8601 UTC> }`
 
 # Hard rules
 

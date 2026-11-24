@@ -36,6 +36,7 @@ nav:
   - Getting Started: getting-started.md
   - Features:
     - Chat & Conversations: features/chat.md
+    - Team Mode: features/team-mode.md
     - Multi-Service: features/multi-service.md
     - Tools: features/tools.md
     - MCP Servers: features/mcp.md
@@ -59,6 +60,11 @@ nav:
     - Token Usage: features/token-usage.md
     - Thinking Effort: features/thinking-effort.md
     - Device Control: features/device-control.md
+    - Goals: features/goals.md
+    - Task List: features/task-list.md
+    - Subagents: features/subagents.md
+    - Tool Approval: features/tool-approval.md
+    - Context Folding: features/context-folding.md
   - Knowledge:
     - Free Tier:
       - Overview: knowledge/free-tier/index.md
@@ -84,4 +90,3 @@ nav:
       - Refresh Playbook: knowledge/popular-mcp/refresh-playbook.md
       - Selection Policy: knowledge/popular-mcp/selection-policy.md
       - Servers: knowledge/popular-mcp/servers.md
-  - Desktop Release Smoke Test: desktop-release-smoketest.md

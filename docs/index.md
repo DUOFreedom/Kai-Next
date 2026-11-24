@@ -1,27 +1,29 @@
 # Kai
 
-An **open-source AI assistant with persistent memory** that runs on **Android, iOS, Windows, Mac, Linux, and Web**.
+An **open-source AI assistant with persistent memory** that runs on **Android**.
 
 [:material-download: Get Started](getting-started.md){ .md-button .md-button--primary }
-[:material-github: GitHub](https://github.com/SimonSchubert/Kai){ .md-button }
+[:material-github: GitHub](https://github.com/DUOFreedom/Kai-Next){ .md-button }
 
 ## Overview
 
-Kai is built with Kotlin Multiplatform and Compose Multiplatform. It connects to 30 LLM providers (plus a keyless Free tier and on-device models) with automatic fallback, remembers important details across conversations, and can act autonomously via scheduled heartbeats and tool execution.
+Kai is built with Kotlin and Compose, targeting Android. It connects to 30 LLM providers (plus a keyless Free tier and on-device models) with automatic fallback, remembers important details across conversations, and can act autonomously via scheduled heartbeats and tool execution.
+
+This fork is Android only: the iOS, desktop and WebAssembly targets of the upstream project are removed, along with their release pipelines.
 
 ## Key Features
 
 - **Persistent memory** — Kai remembers important details across conversations and uses them automatically
 - **Customizable soul** — Define the AI's personality and behavior with an editable system prompt
 - **Multi-service fallback** — Configure multiple providers; Kai automatically tries the next one on failure
-- **On-device inference** — Run models locally with LiteRT on Android, iOS and desktop, no internet needed
+- **On-device inference** — Run models locally with LiteRT, no internet needed
 - **Tool execution** — Web search, notifications, calendar events, shell commands, and more
 - **MCP server support** — Connect to remote tool servers via the Model Context Protocol
 - **Interactive UI** — The AI can answer with interactive screens (forms, buttons, multi-step flows) instead of plain text
 - **Skills** — Install reusable instruction bundles in the SKILL.md format (Android)
 - **Autonomous heartbeat & scheduled tasks** — Periodic self-checks plus one-time or recurring tasks the AI schedules
 - **Linux sandbox** — On Android, the AI can run shell commands, scripts and packages in a Debian or Alpine environment
-- **Kai Build** — An Android coding environment with terminals and coding agents (Claude Code, Grok, OpenCode)
+- **Kai Build** — An Android coding environment with terminals and coding agents (Claude Code, Codex, Gemini CLI, OpenCode, Aider)
 - **Encrypted storage** — Conversations are stored locally with encryption
 - **Settings export/import** — Back up and restore all settings as a JSON file
 - **Text to speech** — Listen to AI responses
@@ -112,7 +114,7 @@ Kai is built with Kotlin Multiplatform and Compose Multiplatform. It connects to
 | [1min.AI](https://1min.ai) | OpenAI-compatible |
 | [Perplexity](https://www.perplexity.ai) | OpenAI-compatible |
 | OpenAI-Compatible API (Ollama, LM Studio, etc.) | OpenAI-compatible |
-| Local Model (Android, iOS, desktop) | LiteRT on-device |
+| Local Model (Android) | LiteRT on-device |
 
 Plus a built-in **Free** tier that requires no API key.
 
@@ -121,11 +123,6 @@ Plus a built-in **Free** tier that requires no API key.
 | Platform | Distribution |
 |---|---|
 | Android | Google Play, F-Droid, APK |
-| iOS | App Store |
-| macOS | Homebrew, DMG |
-| Windows | Winget, MSI |
-| Linux | DEB, RPM, AppImage, Flatpak, tarball, AUR |
-| Web | Browser |
 
 ## Feature Documentation
 
@@ -153,7 +150,6 @@ Plus a built-in **Free** tier that requires no API key.
 
 ## Links
 
-- [GitHub Repository](https://github.com/SimonSchubert/Kai)
-- [Issue Tracker](https://github.com/SimonSchubert/Kai/issues)
-- [Releases](https://github.com/SimonSchubert/Kai/releases)
-- [Web App](https://kai9000.com/app/)
+- [GitHub Repository](https://github.com/DUOFreedom/Kai-Next)
+- [Issue Tracker](https://github.com/DUOFreedom/Kai-Next/issues)
+- [Releases](https://github.com/DUOFreedom/Kai-Next/releases)

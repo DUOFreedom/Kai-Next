@@ -1,6 +1,6 @@
 # Chat & Conversations
 
-**Last verified:** 2026-10-02
+**Last verified:** 2026-11-18
 
 Kai's chat system manages the message history, conversation persistence, file attachments, and speech output. Conversations are service-independent — switching providers does not affect which conversation is loaded or restored. Multiple conversations are persisted and browsable via a history sheet.
 
@@ -8,7 +8,7 @@ Kai's chat system manages the message history, conversation persistence, file at
 
 ### Conversation
 
-A persisted chat session containing an id (UUID), message list, timestamps (`createdAt`, `updatedAt`), a title, and a type (`chat`, `heartbeat`, or `interactive`). Conversations are stored in a local database (browser builds use the settings store) and restored across app launches.
+A persisted chat session containing an id (UUID), message list, timestamps (`createdAt`, `updatedAt`), a title, and a type (`chat`, `heartbeat`, or `interactive`). Conversations are stored in a local database (a build without a bundled database driver falls back to the settings store) and restored across app launches.
 
 ### History
 
@@ -74,7 +74,7 @@ Multiple files can be attached to a single prompt. Each file is added one at a t
 - Not offered on the built-in Free service (its proxy fans out to text-only fallback models that reject multimodal content) or on 1min.AI
 - Also hidden when the active model is known to be text-only (e.g. DeepSeek chat models, GLM text models), even on services that otherwise accept images
 - Shown as a preview thumbnail (max 200dp wide) inside the user message bubble
-- Clicking the thumbnail opens a full-screen viewer with pinch-to-zoom, double-tap to toggle zoom, pan when zoomed, and a close button in the top-right (also dismissable via the Android back button or by tapping the backdrop; desktop has no keyboard shortcut for dismissal)
+- Clicking the thumbnail opens a full-screen viewer with pinch-to-zoom, double-tap to toggle zoom, pan when zoomed, and a close button in the top-right (also dismissable via the Android back button or by tapping the backdrop)
 
 ### Text files
 - Supports `.txt`, `.md`, `.json`, `.csv`, `.xml`, `.yaml`, `.html`, `.css`, `.js`, `.ts`, `.kt`, `.py`, `.rs`, `.go`, `.c`, `.cpp`, `.swift`, `.sh`, `.sql`, `.toml`, `.ini`, `.log`, `.gradle`, and more
@@ -107,8 +107,8 @@ Multiple files can be attached to a single prompt. Each file is added one at a t
 
 ## Conversation Storage
 
-- On Android, iOS, and desktop, conversations live in a local SQLite database in app-private storage: one row per conversation plus one row per message, so saving a turn writes only the affected conversation instead of re-serializing the whole history
-- The browser build has no persistent database and keeps the full conversation list as a JSON blob in the settings store (see [encryption.md](encryption.md))
+- Conversations live in a local SQLite database in app-private storage: one row per conversation plus one row per message, so saving a turn writes only the affected conversation instead of re-serializing the whole history
+- A settings-store JSON blob is the fallback for any build without a bundled SQLite driver; it keeps the full conversation list in one key (see [encryption.md](encryption.md))
 - Conversations are upserted — updating a conversation replaces the existing entry by ID, new conversations are appended; the list loads ordered by creation time
 - Each conversation also retains a rolling tail of its sandbox shell transcript (last ~10,000 characters) so that follow-up commands in a resumed conversation see the prior shell context; transcript updates write only that field
 - Migration chain, run once on first load: the legacy encrypted `conversations.enc` file (XOR with a 32-byte random key) migrates into the settings-store blob; a settings-store blob found on a database-capable platform is imported into the database and removed. Settings import reuses the same path — imported conversations are staged in the settings store and absorbed into the database on the next load, replacing its content
@@ -122,6 +122,7 @@ Multiple files can be attached to a single prompt. Each file is added one at a t
 - **Scroll to bottom**: a small floating action button (down arrow) appears when the user has scrolled up past the latest messages; tapping it animates back to the bottom
 - **Messages**: user (right-aligned, with optional image preview), assistant (Markdown-rendered + action buttons), tool executing (spinner), loading indicator, error with retry (or free-provider suggestions panel when Free is rate-limited with no services configured). When the fallback chain answered with an alternate service rather than the user's selected one, a small "Answered by …" label is shown under the assistant message naming the service that produced the response
 - **Input**: text field, send/stop button, attachment button, file chip
+- **Team/Solo switch**: in the stats strip under the transcript, next to the token and round counters. Selecting Team sends the next message through the planner instead of a single reply; the choice is per session and is not persisted. See [team-mode.md](team-mode.md)
 - **Empty state**: animated logo + welcome message
 - **Drag-and-drop**: supported for file attachments
 - **History sheet**: bottom sheet listing saved conversations with title, date, active highlight, and delete
@@ -133,7 +134,7 @@ Multiple files can be attached to a single prompt. Each file is added one at a t
 | `composeApp/src/commonMain/.../data/Conversation.kt` | Conversation and message data classes, type constants |
 | `composeApp/src/commonMain/.../data/ConversationStorage.kt` | In-memory conversation flow, transcript trimming, legacy migration |
 | `composeApp/src/commonMain/.../data/ConversationPersistence.kt` | SQL and settings-blob persistence backends, staged-import handling |
-| `composeApp/src/commonMain/sqldelight/com/inspiredandroid/kai/db/conversation.sq` | Conversation and message table schema and queries |
+| `composeApp/src/commonMain/sqldelight/com/kainext/duo/db/conversation.sq` | Conversation and message table schema and queries |
 | `composeApp/src/commonMain/.../data/FileClassification.kt` | File category enum, MIME/extension classifier, size constants, file exceptions |
 | `composeApp/src/commonMain/.../data/RemoteDataRepository.kt` | History management, conversation save/restore/delete, title derivation, message sending |
 | `composeApp/src/commonMain/.../ui/chat/ChatViewModel.kt` | Chat UI state, send/retry/regenerate/cancel/loadConversation/deleteConversation actions |
@@ -144,5 +145,7 @@ Multiple files can be attached to a single prompt. Each file is added one at a t
 | `composeApp/src/commonMain/.../ui/chat/composables/FreeProviderSuggestionsPanel.kt` | Free rate-limit upsell panel with provider chips |
 | `composeApp/src/commonMain/.../data/FreeProviderSuggestions.kt` | Providers offered in the Free rate-limit upsell panel |
 | `composeApp/src/commonMain/.../ui/chat/composables/QuestionInput.kt` | Text input with send/stop button |
+| `composeApp/src/commonMain/.../ui/chat/composables/ChatStatsBar.kt` | Token/round counters and the Team/Solo switch |
+| `composeApp/src/commonMain/.../ui/chat/composables/TeamPlanCard.kt` | The plan card shown for a team-mode turn |
 | `androidApp/src/main/AndroidManifest.xml` | Share-sheet registration for plain text (`ACTION_SEND`) |
 | `androidApp/src/main/kotlin/.../MainActivity.kt` | Reads shared text from `ACTION_SEND` and hands it to chat |

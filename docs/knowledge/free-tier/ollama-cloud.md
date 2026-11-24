@@ -7,7 +7,7 @@ status: stable
 resource: https://ollama.com/v1/models
 stale_after: 2026-08-25
 generated: { by: process:update-free-tier-models, at: 2026-08-11T17:42:05Z }
-verified: { by: process:desktopTest-FreeTierModels, at: 2026-08-11T17:43:36Z }
+verified: { by: process:testAndroidHostTest-ModelTransformations, at: 2026-08-11T17:43:36Z }
 sources:
   - id: ollama-v1-models
     resource: https://ollama.com/v1/models

@@ -105,8 +105,8 @@ Recent Battles log keeps up to 500 entries (5 visible by default, with a "Show m
 
 ## Platform Support
 
-- **Desktop (JVM)** and **Android**: Full support via BouncyCastle secp256k1. Signing uses RFC 6979 deterministic k with y-parity based recovery ID computation. Transaction signing uses single SHA-256 of (chain_id + serialized tx), following the Hive/Graphene signing protocol.
-- **iOS** and **Web**: Hidden (`isSplinterlandsSupported = false`)
+- **Android**: Full support via BouncyCastle secp256k1. Signing uses RFC 6979 deterministic k with y-parity based recovery ID computation. Transaction signing uses single SHA-256 of (chain_id + serialized tx), following the Hive/Graphene signing protocol.
+- **Other platforms**: not part of this fork — the section is hidden (`isSplinterlandsSupported = false`).
 
 ## Key Files
 
@@ -119,10 +119,7 @@ Recent Battles log keeps up to 500 entries (5 visible by default, with a "Show m
 | `splinterlands/SplinterlandsTeamPicker.kt` | Ruleset filtering, card scoring, LLM prompt building, response parsing, validation, silent fixes |
 | `splinterlands/SplinterlandsBattleRunner.kt` | Battle loop with `queryServicesInParallel()` for parallel multi-service LLM querying |
 | `splinterlands/HiveCrypto.kt` | Expect declarations for Hive signing |
-| `jvmShared/.../splinterlands/HiveCrypto.jvmShared.kt` | BouncyCastle secp256k1 ECDSA, shared by Android and Desktop — one implementation, so the two builds cannot sign differently |
-| `splinterlands/HiveCrypto.ios.kt` | Stub/unsupported implementation (iOS) |
-| `splinterlands/HiveCrypto.wasmJs.kt` | Stub/unsupported implementation (Web) |
-| `splinterlands/HiveCryptoTest.kt` | Signing + recovery round-trip tests (desktopTest) |
+| `jvmShared/.../splinterlands/HiveCrypto.jvmShared.kt` | BouncyCastle secp256k1 ECDSA, the single implementation behind the Android actual |
 | `data/AppSettings.kt` | Splinterlands key/value accessors including `splinterlands_instance_ids` JSON array |
 | `ui/settings/SplinterlandsUiState.kt` | `SplinterlandsUiState`, `SplinterlandsAccountUiState`, `SplinterlandsAddStatus` |
 | `ui/settings/SplinterlandsViewModel.kt` | Wires Splinterlands callbacks, builds account states from battle runner |

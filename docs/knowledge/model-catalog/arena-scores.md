@@ -7,7 +7,7 @@ status: stable
 resource: https://arena.ai/leaderboard/text
 stale_after: 2026-10-16
 generated: { by: process:update-model-catalog, at: 2026-10-02T19:46:00Z }
-verified: { by: process:desktopTest-ModelCatalog, at: 2026-10-02T19:48:03Z }
+verified: { by: process:testAndroidHostTest-ModelCatalog, at: 2026-10-02T19:48:03Z }
 sources:
   - id: arena-text
     resource: https://arena.ai/leaderboard/text

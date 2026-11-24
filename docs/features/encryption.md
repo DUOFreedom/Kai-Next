@@ -1,8 +1,8 @@
 # Encryption & Secure Storage
 
-**Last verified:** 2026-10-02
+**Last verified:** 2026-11-18
 
-All app settings — including sensitive ones such as API keys and email passwords — are stored in a single platform-specific secure settings store. Each platform uses the strongest available mechanism.
+All app settings — including sensitive ones such as API keys and email passwords — are stored in a single encrypted settings store backed by the Android Keystore.
 
 ## Sensitive Data
 
@@ -12,9 +12,10 @@ The following data is stored in secure settings:
 - Splinterlands posting key
 - MCP server request headers (e.g. authorization tokens), stored with the server list
 - Encryption key for legacy conversation migration
-- Conversation history on the browser build only — on Android, iOS, and desktop, conversations live in a local SQLite database in app-private storage (unencrypted at the application layer; protected by the OS app sandbox and any platform full-disk/file-based encryption). See [chat.md](chat.md) for the storage layout and migration chain.
 
-## Platform Implementations
+Conversation history itself is not in the secure settings store: it lives in a local SQLite database in app-private storage, unencrypted at the application layer and protected by the OS app sandbox and any device full-disk/file-based encryption. See [chat.md](chat.md) for the storage layout and migration chain.
+
+## Platform Implementation
 
 ### Android
 - **Mechanism:** `EncryptedSharedPreferences` via `dev.spght:encryptedprefs-ktx` (community fork of deprecated `androidx.security:security-crypto`)
@@ -24,33 +25,7 @@ The following data is stored in secure settings:
 - **Size limit:** ~2 MB per value (SharedPreferences limit)
 - **File location:** App-private `kai_secure_prefs` SharedPreferences
 - **Restore recovery:** If the encrypted file cannot be opened (typically after Android Auto Backup restores it onto a device whose hardware-bound Keystore key did not transfer), the file is deleted and a fresh empty store is created — settings and keys must be re-entered.
-- **Legacy migration:** On first run, values from the old plaintext `com.kainext.duo_preferences` (selected service, model ids, API keys, base URL, app-open counter) are copied into the encrypted store once.
-
-### iOS
-- **Mechanism:** `KeychainSettings` (`com.russhwolf/multiplatform-settings`)
-- **Encryption:** Hardware-backed Keychain encryption (AES-256-GCM via Secure Enclave on supported devices)
-- **Key management:** Managed by iOS Keychain Services
-- **Size limit:** Effectively unlimited
-- **Service identifier:** `com.kainext.duo`
-- **Legacy migration:** On first run, the same legacy keys are copied once from `NSUserDefaults`.
-
-### Desktop (macOS, Windows, Linux)
-- **Mechanism:** `EncryptedFileSettings` — custom file-backed `Settings` implementation
-- **Encryption:** AES-256-GCM via `javax.crypto`
-- **Key management:** 256-bit random key generated via `SecureRandom`, stored at `~/.kai/settings.key`
-- **IV:** 12-byte random IV per write, prepended to ciphertext
-- **Authentication tag:** 128-bit GCM tag (integrity + authenticity)
-- **File format:** `[12-byte IV][AES-GCM ciphertext + tag]`
-- **File location:** `~/.kai/settings.aes`
-- **Write safety:** Every change re-encrypts the whole store and writes it to a temporary file that is atomically renamed over the old one, so a crash mid-write never leaves a truncated file. Concurrent writers are serialized. The key and settings files are restricted to owner read/write.
-- **Unreadable file:** If the settings file fails to decrypt (wrong or missing key, truncation, tampering), it is renamed aside to `settings.aes.unreadable-<timestamp>` and the app starts with empty settings, so the original is never overwritten.
-- **Size limit:** None (file-based)
-- **Migration:** On first run, migrates existing data from Java Preferences (`Preferences.userRoot()`) and clears the old store. Java Preferences was the previous backend but has an 8 KB per-value hard limit.
-
-### Web (WASM)
-- **Mechanism:** `StorageSettings` (browser `localStorage`)
-- **Encryption:** None (browser sandbox provides isolation)
-- **Size limit:** ~5 MB total (browser-dependent)
+- **Legacy migration:** On first run, values from the old plaintext `com.kainext.duo_preferences` (selected service, model ids, API keys, base URL, app-open counter) are copied into the encrypted store once. The legacy file name carries the applicationId, so the app rename to `com.kainext.duo` produced a separate install with its own sandbox — in practice there is nothing to copy on a fresh install, and the read is harmless when the file is absent.
 
 ## Legacy Conversation Storage
 
@@ -58,10 +33,10 @@ Prior to the current database-backed storage, conversations were stored in an en
 
 1. Read `conversations.enc` from the app files directory
 2. Decrypt using XOR with the key from `encryption_key` in settings
-3. Persist to the current conversation storage (database, or settings blob on the browser build)
+3. Persist to the current conversation storage
 4. Delete the legacy file
 
-On database-capable platforms, a conversation blob found in secure settings is likewise imported into the database and removed from settings on first load.
+A conversation blob found in secure settings is likewise imported into the database and removed from settings on first load.
 
 The XOR encryption key is retained in settings for any devices that haven't migrated yet.
 
@@ -70,12 +45,8 @@ The XOR encryption key is retained in settings for any devices that haven't migr
 | File | Purpose |
 |---|---|
 | `composeApp/src/commonMain/.../Platform.kt` | `expect fun createSecureSettings()` declaration |
-| `composeApp/src/androidMain/.../Platform.android.kt` | Android EncryptedSharedPreferences setup |
-| `composeApp/src/iosMain/.../Platform.ios.kt` | iOS KeychainSettings setup |
-| `composeApp/src/desktopMain/.../Platform.jvm.kt` | Desktop EncryptedFileSettings wiring |
-| `composeApp/src/desktopMain/.../data/EncryptedFileSettings.kt` | AES-256-GCM file-backed Settings implementation |
-| `composeApp/src/wasmJsMain/.../Platform.wasmJs.kt` | Web localStorage setup |
+| `composeApp/src/androidMain/.../Platform.android.kt` | Android EncryptedSharedPreferences setup, restore recovery, and the legacy plaintext store |
 | `composeApp/src/commonMain/.../data/ConversationStorage.kt` | Legacy XOR migration logic |
 | `composeApp/src/commonMain/.../data/AppSettings.kt` | Settings access layer for all app data |
-| `composeApp/src/commonMain/.../data/AppSettingsMigrations.kt` | One-time copy from legacy plaintext settings (Android/iOS) |
+| `composeApp/src/commonMain/.../data/AppSettingsMigrations.kt` | One-time copies from the legacy plaintext settings store |
 | `composeApp/src/commonMain/.../data/ConversationPersistence.kt` | Database vs. settings-blob conversation storage; imports a settings blob into the database |

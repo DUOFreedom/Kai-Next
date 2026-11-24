@@ -10,7 +10,7 @@ OKF v0.2 bundle for Kai’s **curated one-tap MCP endpoints**. Agents use this f
 
 | Layer | Path | Role |
 |---|---|---|
-| **Runtime** (shipped) | `composeApp/src/commonMain/kotlin/com/inspiredandroid/kai/mcp/PopularMcpServers.kt` | Source of truth for the Settings → Tools one-tap list |
+| **Runtime** (shipped) | `composeApp/src/commonMain/kotlin/com/kainext/duo/mcp/PopularMcpServers.kt` | Source of truth for the Settings → Tools one-tap list |
 | **Knowledge** (this bundle) | `docs/knowledge/popular-mcp/` | Selection policy, last probe snapshot, sources, stale dates |
 | **Refresh skill** | `.grok/skills/update-popular-mcp-servers/SKILL.md` | Probes endpoints, updates Kotlin + this bundle |
 

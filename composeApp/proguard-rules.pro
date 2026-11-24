@@ -183,12 +183,11 @@
 -keep class org.slf4j.** { *; }
 -dontwarn org.slf4j.**
 
-# Compose runtime / UI is intentionally NOT broadly kept here — the Compose
-# Gradle plugin (desktop) and androidx.compose's consumer ProGuard rules
-# (Android R8) already ship targeted keeps for the reflective hotspots
-# (SliderDefaults, SnapshotStateKt__DerivedStateKt, etc.). Letting Compose
-# be the one package ProGuard is allowed to rewrite is what buys us the size
-# win on desktop (see proguard-desktop.pro's negative-match keep).
+# Compose runtime / UI is intentionally NOT broadly kept here — the
+# androidx.compose consumer ProGuard rules (which Android R8 applies) already
+# ship targeted keeps for the reflective hotspots (SliderDefaults,
+# SnapshotStateKt__DerivedStateKt, etc.). Compose is the one package R8 is
+# allowed to rewrite, which is where most of the shrink win comes from.
 -dontwarn androidx.compose.**
 -dontwarn org.jetbrains.compose.**
 -dontwarn androidx.annotation.**

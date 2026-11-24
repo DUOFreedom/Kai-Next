@@ -1,6 +1,6 @@
 # Tools
 
-**Last verified:** 2026-10-02
+**Last verified:** 2026-11-17
 
 Kai's tools feature allows the AI to execute external functions during conversations — web search, notifications, calendar events, shell commands, memory operations, and more. Tools are defined with a schema, executed with safety guards, and managed through per-tool toggles in settings.
 
@@ -40,12 +40,25 @@ An argument explicitly sent as JSON `null` is treated as not provided, so the to
 
 #### open_url platform behavior
 
-The `open_url` tool accepts both web URLs and `file://` URIs. Each platform opens URLs using its native mechanism:
+The `open_url` tool accepts both web URLs and `file://` URIs, opened with an `ACTION_VIEW` intent. `file://` URIs are limited to the Linux sandbox's `/root` (e.g. `file:///root/site/index.html`) and resolved exactly like `open_file`, then served through FileProvider so the file opens in the appropriate app (e.g. `.html` files open in the browser). Any other local path is refused, so the model can't hand app-private files (settings, databases) to another app.
 
-- **Android** — Uses `ACTION_VIEW` intents. `file://` URIs are limited to the Linux sandbox's `/root` (e.g. `file:///root/site/index.html`) and resolved exactly like `open_file`, then served through FileProvider so the file opens in the appropriate app (e.g. `.html` files open in the browser). Any other local path is refused, so the model can't hand app-private files (settings, databases) to another app.
-- **Desktop** — Uses `java.awt.Desktop.browse()`.
-- **iOS** — Uses `UIApplication.openURL()`.
-- **Web** — Uses `window.open()` with `_blank` target.
+### Agent work (cross-platform)
+
+Tools for the shape of the work itself rather than the outside world: what the agent is trying to finish, which steps are left, what got condensed out of the conversation, and handing a side errand to a child agent. None of them follow a master toggle in Settings → Agent — each has its own switch in the Tools tab.
+
+| Tool | Description | Default |
+|---|---|---|
+| `todo_write` | Show the user a task list for a multi-step job and keep it up to date | Enabled |
+| `create_goal` | Record a long-running objective so the agent keeps working on it across replies | Enabled |
+| `update_goal` | Report whether the active goal is done, paused, or blocked | Enabled |
+| `run_subagent` | Delegate a self-contained investigation to a subagent that reports only its conclusion (Android) | Enabled |
+| `search_context` | Search the summaries of folded conversation segments | Enabled |
+| `decompress` | Read the original transcript behind one folded block, by block id | Enabled |
+| `context_status` | List the folded blocks kept for this conversation and what they cover | Enabled |
+
+These four families are deliberately ungated by the memory, scheduling or email switches, because they describe the conversation rather than reach outside it: a multi-step turn needs somewhere to show progress, a job that outlives one reply needs to say so, and a compaction that condenses history away needs a way to read behind the summary. See [task-list.md](task-list.md), [goals.md](goals.md), [subagents.md](subagents.md) and [context-folding.md](context-folding.md).
+
+`run_subagent` is registered by the Android platform layer after the rest of the tool family is assembled, so the child inherits exactly the tools the user has enabled. The child is never offered `run_subagent` itself, which is what bounds the tree.
 
 ### Memory
 
@@ -71,7 +84,7 @@ Scheduling tools and heartbeat tools are available when the scheduling feature i
 
 ### Email
 
-Email tools are available whenever the email feature is enabled (the default) on Android, iOS, and desktop — including before any account is connected, so the assistant can connect one from chat. The web build has no email tools.
+Email tools are available whenever the email feature is enabled (the default), including before any account is connected, so the assistant can connect one from chat.
 
 | Tool | Description |
 |---|---|
@@ -135,12 +148,12 @@ Handing an `.apk` to the system package installer additionally requires the "ins
 
 #### Shell command parameters
 
-Both platforms support these parameters:
+These parameters are supported:
 
 | Parameter | Type | Description |
 |---|---|---|
 | `command` | string (required) | The shell command to execute |
-| `timeout` | integer | Timeout in seconds (desktop default 30, max 120; Android default 30, max 60) |
+| `timeout` | integer | Timeout in seconds (default 30, max 60) |
 | `working_dir` | string | Working directory for the command |
 | `env` | object | Environment variables to set as key-value pairs |
 | `background` | boolean | Run in background and return a session_id immediately |
@@ -152,9 +165,7 @@ When `background=true`, the command starts asynchronously and returns a `session
 
 On Android, each conversation gets its own persistent bash session inside the Linux sandbox. This is the default execution mode for `execute_shell_command`: `cd`, environment variable exports, shell functions, and other in-shell state carry across calls within the same conversation, so the AI can build up working context the same way a human terminal user does. Passing `fresh: true` opts out of the persistent session for a single call — that command runs in a one-shot proot invocation with no shared state, useful when the AI wants a clean environment without disturbing the ongoing session.
 
-The desktop tool dynamically includes the detected OS (macOS/Linux/Windows) and shell in its description so the AI knows the execution context.
-
-On desktop, dangerous environment variables (PATH, LD_PRELOAD, LD_LIBRARY_PATH, DYLD_INSERT_LIBRARIES, DYLD_LIBRARY_PATH, DYLD_FRAMEWORK_PATH) cannot be overridden via the `env` parameter.
+The tool description is composed per distribution, so the AI knows which package manager and which pre-installed set it is talking to.
 
 #### Process management
 
@@ -171,14 +182,7 @@ The `manage_process` tool is automatically available when the shell command tool
 
 Command output uses smart middle truncation: when output exceeds the limit, both the beginning and end are preserved with a truncation marker in the middle. This ensures error messages (typically at the end) are not lost.
 
-Output limits: desktop 30,000 chars per stream, Android 15,000 chars per stream. Final tool results are truncated at 20,000 chars.
-
-### Platform-specific (Desktop)
-
-| Tool | Description | Default |
-|---|---|---|
-| `execute_shell_command` | Execute a shell command on the host machine | Disabled |
-| `manage_process` | Manage background shell processes (list, log, kill, remove) | Follows the shell command toggle; no switch of its own |
+Output limits: 15,000 chars per stream. Final tool results are truncated at 20,000 chars.
 
 ## Execution Flow
 
@@ -199,17 +203,23 @@ The loop supports OpenAI-compatible, Gemini, and Anthropic provider formats, wit
 
 ### Iteration limit
 
-The tool loop runs a maximum of 15 iterations. If exceeded, the AI is asked to respond with the best answer it has so far, with tools removed from the request.
+The tool loop runs a maximum number of rounds per message — 100 by default, adjustable from 3 to 200 in Settings → Tools. If the limit is exceeded, the AI is asked to respond with the best answer it has so far, with tools removed from the request.
+
+The limit is read once per turn, so a change in Settings applies from the next message rather than mid-turn. Installs that never touched the setting are migrated once from the older default of 30 to the current 100, so a long task that used to be cut off now finishes in one message.
 
 ### Repeated call detection
 
-Each tool call produces a signature from its name and arguments hash. If the same signature pattern appears 3 consecutive times, the loop is stopped and the AI is asked to respond with what it has.
+Each tool call produces a signature from its name and arguments hash. If the same signature pattern appears a configurable number of consecutive times — 5 by default, adjustable from 2 to 20 in Settings → Tools — the loop is stopped and the AI is asked to respond with what it has.
+
+### Parallelism
+
+Batch tool calls run concurrently, up to a configurable number of permits — 20 by default, adjustable from 1 to 32 in Settings → Tools. Unbounded fan-out on a phone means a dozen shell probes and file reads competing for the same cores and memory, which is slower and can end in the process being killed. The limit applies per batch, not per conversation.
 
 ### Timeout
 
-Each tool has a configurable timeout defaulting to 30 seconds. If execution exceeds the timeout, the call is cancelled and an error is returned as the tool result. The shell tool enforces its own per-call timeout (up to 60 s on Android, 120 s on desktop), so its outer limit sits above that maximum.
+Each tool has a configurable timeout defaulting to 30 seconds. If execution exceeds the timeout, the call is cancelled and an error is returned as the tool result. The shell tool enforces its own per-call timeout (up to 60 s), so its outer limit sits above that maximum.
 
-Cancelling a shell call — the user pressing stop, or the outer timeout — stops the command instead of abandoning it. On Android the persistent shell interrupts the foreground command (SIGINT → SIGTERM → SIGKILL) and resets the session if that fails, before the next call can start, so a stale command's output never leaks into the next result. On desktop the command's process tree is killed. A desktop command that leaves a background child holding its output open (e.g. `server &`) returns after a short grace with the output collected so far and a hint to use `background=true`.
+Cancelling a shell call — the user pressing stop, or the outer timeout — stops the command instead of abandoning it. The persistent shell interrupts the foreground command (SIGINT → SIGTERM → SIGKILL) and resets the session if that fails, before the next call can start, so a stale command's output never leaks into the next result.
 
 ### Result truncation
 
@@ -233,6 +243,12 @@ When the fallback chain is active, each fallback service is checked before use. 
 
 When conversation history exceeds 70% of the primary model's context window, an AI-powered compaction runs before the next API call. Older messages are summarized into a single compact entry via a separate LLM call, while the most recent 4 user exchanges are kept verbatim. If the summarization call fails, the history is left intact while it still fits the context window; older messages are dropped only when it no longer fits at all. Stopping the request during compaction never changes the history.
 
+Each compaction keeps the text it replaced in a folded block on the device, so the summary is not a dead end: `search_context` finds the block a topic was condensed into, `decompress` reads the original transcript back by block id, and `context_status` lists what is stored. See [context-folding.md](context-folding.md).
+
+### Approval gate
+
+Before a tool with side effects runs, the executor consults the approval policy. High-risk tools — shell commands, device control, SMS, email, alarms, notifications, subagents — pause and ask the user first under the default policy; a standing permission for that tool skips the dialog. See [tool-approval.md](tool-approval.md).
+
 ## MCP Servers
 
 See [mcp.md](mcp.md) for the full MCP feature spec.
@@ -244,8 +260,8 @@ Tool availability is controlled at multiple levels:
 - **Feature-level gates** — memory tools require memory enabled, scheduling/heartbeat tools require scheduling enabled, email tools require email enabled
 - **Sandbox install gate (Android)** — `execute_shell_command`, `manage_process`, and `ssh_configure_host` are surfaced only when the Linux sandbox is actually installed (Ready) *and* the sandbox toggle is on. Until the sandbox is installed these tools are not sent to the model at all; the sandbox toggle itself is hidden until install completes, so there is no state in which they ride along without a working sandbox behind them
 - **Per-tool toggles** — individual tools can be enabled or disabled in settings, persisted with a `tool_enabled_` key prefix
-- **Default state** — most tools default to enabled; desktop's `execute_shell_command` defaults to disabled. On Android the shell has no per-tool switch — it follows the sandbox switch, which is on by default once the sandbox is installed
-- **Master-toggle-only** — memory, scheduling, heartbeat, email, SMS, and notification tools have no individual per-tool toggle; they are on whenever their master switch in Settings → Agent is on (heartbeat is bundled with the scheduling switch). The Android sandbox tools and desktop's `manage_process` are gated the same way — by the sandbox switch and the shell switch respectively — and likewise carry no switch of their own
+- **Default state** — most tools default to enabled. The shell has no per-tool switch on Android — it follows the sandbox switch, which is on by default once the sandbox is installed
+- **Master-toggle-only** — memory, scheduling, heartbeat, email, SMS, and notification tools have no individual per-tool toggle; they are on whenever their master switch in Settings → Agent is on (heartbeat is bundled with the scheduling switch). The sandbox tools are gated the same way — by the sandbox switch — and likewise carry no switch of their own
 - **On-device (LiteRT) allowlist** — when the active model is an on-device LiteRT model, only a small allowlist of tools is exposed regardless of which other tools are enabled. The current allowlist is: `get_local_time`, `get_location_from_ip`, `web_search`, `open_url`, `memory_store`, `memory_forget`, `memory_reinforce`, and `execute_shell_command`. Memory tools beyond the three listed, email tools, scheduling tools, and heartbeat tools are not surfaced to local models even when their master switches are on.
 
 The platform layer assembles the final list of available tools by checking all gates and per-tool settings, and only enabled tools are sent to the AI provider.
@@ -262,7 +278,15 @@ Each card shows the tool name, a short description, and a toggle switch. Clickin
 
 The grid sits below the MCP servers section and, on Android, the Skills section (see [skills.md](skills.md)).
 
-Only individually toggleable tools appear in the grid. Tools whose only control is a master toggle in Settings → Agent (memory, scheduling, heartbeat, email, SMS, notifications) are not listed here — they appear and disappear with their feature switch. The same applies to tools gated by a capability rather than a setting: the Android sandbox tools follow the sandbox switch, and desktop's `manage_process` follows the shell switch.
+Only individually toggleable tools appear in the grid. Tools whose only control is a master toggle in Settings → Agent (memory, scheduling, heartbeat, email, SMS, notifications) are not listed here — they appear and disappear with their feature switch. The same applies to tools gated by a capability rather than a setting: the sandbox tools follow the sandbox switch.
+
+### Tool call limits
+
+A section above the grid carries the three per-install knobs the tool loop reads: max tool rounds per message, the repeat threshold that stops a stuck loop, and how many tools in one batch run at once. Each is a stepper showing its current value and default, with a single control that restores all three to their defaults. A change applies from the next message onward, since the loop reads the values once per turn.
+
+### Approval policy
+
+The same tab holds the confirmation policy (ask always / ask for risky tools only / never ask) and the list of tools granted a standing permission, with one control to clear them all. See [tool-approval.md](tool-approval.md).
 
 ## Chat UI
 
@@ -304,7 +328,13 @@ The interactive-mode top bar shows only the static title — loading is surfaced
 | `composeApp/src/commonMain/.../data/RemoteDataRepository.kt` | Tool loop (OpenAI-compatible, Responses API, Gemini, Anthropic), parallel execution, context trimming, on-device allowlist |
 | `composeApp/src/commonMain/.../data/providers/OpenAIMessages.kt` | OpenAI-compatible message building + tool-call pairing sanitization |
 | `composeApp/src/commonMain/.../tools/CommonTools.kt` | Common tool implementations and the cross-platform definition list |
-| `composeApp/src/commonMain/.../tools/AgentToolSet.kt` | Shared gating every platform's available-tools list is built from |
+| `composeApp/src/commonMain/.../tools/AgentToolSet.kt` | Shared gating the available-tools list is built from |
+| `composeApp/src/commonMain/.../tools/TodoTools.kt` | `todo_write` |
+| `composeApp/src/commonMain/.../tools/GoalTools.kt` | `create_goal`, `update_goal` |
+| `composeApp/src/commonMain/.../tools/SubagentTools.kt` | `run_subagent` |
+| `composeApp/src/commonMain/.../tools/ContextFoldTools.kt` | `search_context`, `decompress`, `context_status` |
+| `composeApp/src/commonMain/.../data/ToolApproval.kt` | Approval request/outcome models and the shared gate between executor and UI |
+| `composeApp/src/commonMain/.../data/ToolRiskRegistry.kt` | Tool id → risk classification |
 | `composeApp/src/commonMain/.../tools/WebSearchTool.kt` | `web_search` |
 | `composeApp/src/commonMain/.../tools/FetchUrlTool.kt` | `fetch_url` with private-address and redirect checks |
 | `composeApp/src/commonMain/.../tools/SchedulingTools.kt` | `schedule_task`, `list_tasks`, `cancel_task` |
@@ -312,8 +342,6 @@ The interactive-mode top bar shows only the static title — loading is surfaced
 | `composeApp/src/commonMain/.../tools/EmailTools.kt` | Email tools |
 | `composeApp/src/commonMain/.../tools/SmsTools.kt` | SMS tools (FOSS Android) |
 | `composeApp/src/commonMain/.../tools/NotificationTools.kt` | Notification tools (FOSS Android) |
-| `composeApp/src/desktopMain/.../Platform.jvm.kt` | Desktop tool gating and definition list |
-| `composeApp/src/desktopMain/.../tools/ShellCommandTool.kt` | Desktop host shell tool |
 | `composeApp/src/androidMain/.../tools/ShellCommandTool.kt` | Android sandbox shell tool (per-distribution description) |
 | `composeApp/src/androidMain/.../tools/SshConfigureHostTool.kt` | `ssh_configure_host` |
 | `composeApp/src/androidMain/.../sandbox/PersistentSandboxShell.kt` | Per-conversation persistent bash session and command interruption |
@@ -326,8 +354,7 @@ The interactive-mode top bar shows only the static title — loading is surfaced
 | `composeApp/src/androidMain/.../sandbox/ProotExecutor.kt` | Proot command building and execution |
 | `composeApp/src/androidMain/.../linux/` | Shared Linux runtime: distro specs, rootfs download and extraction, installer, proot launcher, guest-path resolution |
 | `composeApp/src/commonMain/.../linux/LinuxDistro.kt` | The distributions, their package sets, and their package-manager commands and parsers |
-| `composeApp/src/jvmShared/.../tools/ProcessManagerTool.kt` | Process management tool shared by Android and desktop |
-| `composeApp/src/desktopMain/.../tools/ProcessManager.kt` | Desktop background process tracking (host processes) |
+| `composeApp/src/jvmShared/.../tools/ProcessManagerTool.kt` | Process management tool shared with the Android platform layer |
 | `composeApp/src/androidMain/.../tools/ProcessManager.kt` | Android background process tracking (proot sandbox) |
 | `composeApp/src/androidMain/.../tools/OpenFileTool.kt` | Open sandbox file in an Android app via FileProvider Intent |
 | `composeApp/src/androidMain/.../sandbox/SandboxFiles.kt` | Path translation, MIME resolution, text-vs-binary reads, streamed imports, and the FileProvider open helper — all shared with the file browser |

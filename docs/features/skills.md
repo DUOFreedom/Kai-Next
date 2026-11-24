@@ -52,7 +52,7 @@ While the user is typing the first token of a message and it starts with `/`, a 
 
 ## Limitations
 
-- Android only — user-installed skills live in the Linux sandbox, which other platforms don't have. The Skills section is hidden off-Android.
+- Android only — user-installed skills live in the Linux sandbox, so the Skills section is hidden when no sandbox is available.
 - The sandbox must be installed before skills (including built-ins) appear and before any skill can be added.
 - Only text files are stored for GitHub installs; binaries and files over 256 KB are skipped.
 - The skill body is appended verbatim to the system prompt, so very large skills consume prompt budget for the turn they're active.

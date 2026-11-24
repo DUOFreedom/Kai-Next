@@ -73,7 +73,7 @@ Interactive UI mode is **not** available on on-device services — the kai-ui co
 4. **Add a focused test** in the corresponding `*BuilderTest` class that verifies the section is present when gated on, absent otherwise.
 5. **Update this doc's table** with the new row.
 6. **Update the wrapper** (`RemoteDataRepository.getActiveSystemPrompt` or `HeartbeatManager.buildHeartbeatPrompt`) to thread the new input through from `AppSettings` / stores.
-7. **Run** `./gradlew :composeApp:desktopTest --tests '*BuilderTest'` to confirm nothing else broke.
+7. **Run** `./gradlew :composeApp:testAndroidHostTest --tests '*BuilderTest'` to confirm nothing else broke.
 
 ## Key files
 

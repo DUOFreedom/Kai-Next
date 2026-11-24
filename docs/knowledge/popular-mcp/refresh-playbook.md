@@ -24,7 +24,7 @@ generated: { by: human:simon, at: 2026-08-12T21:30:00Z }
 
 ## 1. Read the current list
 
-Read `composeApp/src/commonMain/kotlin/com/inspiredandroid/kai/mcp/PopularMcpServers.kt` (`popularMcpServers`) and the **Current set** in [servers.md](servers.md).
+Read `composeApp/src/commonMain/kotlin/com/kainext/duo/mcp/PopularMcpServers.kt` (`popularMcpServers`) and the **Current set** in [servers.md](servers.md).
 
 ## 2. Probe each URL
 
@@ -47,7 +47,7 @@ Auth-optional rows (Jina AI): probe **without** a key. Initialize success is eno
 3. Do **not** add new hosts unless product explicitly expands the list.
 4. Update runtime list in:
 
-   `composeApp/src/commonMain/kotlin/com/inspiredandroid/kai/mcp/PopularMcpServers.kt`
+   `composeApp/src/commonMain/kotlin/com/kainext/duo/mcp/PopularMcpServers.kt`
 
    Preserve `PopularMcpServer` field order, comments, and helper functions. Update descriptions only when the probe shows they are wrong.
 5. If the one-tap list changed, update the server table in `README.md` and the Popular Servers paragraph in `docs/features/mcp.md`.
@@ -60,13 +60,13 @@ Auth-optional rows (Jina AI): probe **without** a key. Initialize success is eno
 
 ## 4. Verify
 
-1. `./gradlew :composeApp:compileKotlinDesktop`
-2. `./gradlew :composeApp:desktopTest --tests '*PopularMcpServers*'`
+1. `./gradlew :composeApp:compileAndroidMain`
+2. `./gradlew :composeApp:testAndroidHostTest --tests '*PopularMcpServers*'`
 3. `./gradlew spotlessApply`
 4. Update `PopularMcpServersTest.kt` only if a fixture name/URL used by tests changed.
 5. On green tests, set on [servers.md](servers.md):
 
-   `verified: { by: process:desktopTest-PopularMcpServers, at: <ISO-8601 UTC> }`
+   `verified: { by: process:testAndroidHostTest-PopularMcpServers, at: <ISO-8601 UTC> }`
 
 # Hard rules
 

@@ -10,7 +10,7 @@ OKF v0.2 bundle for Kai’s **curated free-tier model lists**. Agents use this f
 
 | Layer | Path | Role |
 |---|---|---|
-| **Runtime** (shipped) | `composeApp/src/commonMain/kotlin/com/inspiredandroid/kai/data/FreeTierModels.kt` | Source of truth for Free badges in the app |
+| **Runtime** (shipped) | `composeApp/src/commonMain/kotlin/com/kainext/duo/data/FreeTierModels.kt` | Source of truth for Free badges in the app |
 | **Knowledge** (this bundle) | `docs/knowledge/free-tier/` | Curation policy, current snapshot, sources, stale dates |
 | **Refresh skill** | `.grok/skills/update-free-tier-models/SKILL.md` | Fetches external sources, updates Kotlin + this bundle |
 

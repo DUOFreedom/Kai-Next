@@ -10,7 +10,7 @@ OKF v0.2 bundle for Kai’s **curated model metadata and Arena Elo scores**. Age
 
 | Layer | Path | Role |
 |---|---|---|
-| **Runtime** (shipped) | `composeApp/src/commonMain/kotlin/com/inspiredandroid/kai/data/ModelCatalog.kt` | Source of truth for display name, context window, release date, params, and Elo shown in the app |
+| **Runtime** (shipped) | `composeApp/src/commonMain/kotlin/com/kainext/duo/data/ModelCatalog.kt` | Source of truth for display name, context window, release date, params, and Elo shown in the app |
 | **Knowledge** (this bundle) | `docs/knowledge/model-catalog/` | Matching policy, attested Arena snapshot, stale dates |
 | **Refresh skill** | `.grok/skills/update-model-catalog/SKILL.md` | Fetches the text leaderboard, updates Kotlin + this bundle |
 

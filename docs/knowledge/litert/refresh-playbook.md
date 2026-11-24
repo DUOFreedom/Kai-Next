@@ -24,7 +24,7 @@ generated: { by: human:simon, at: 2026-08-12T20:52:00Z }
 
 ## 1. Read the current catalog
 
-Read `composeApp/src/commonMain/kotlin/com/inspiredandroid/kai/inference/LocalModelCatalog.kt` (`MODEL_CATALOG`).
+Read `composeApp/src/commonMain/kotlin/com/kainext/duo/inference/LocalModelCatalog.kt` (`MODEL_CATALOG`).
 
 For each row parse `downloadUrl` into `repo`, `commit`, `fileName`. Fail the refresh if any URL uses `main` or another non-hex ref.
 
@@ -53,7 +53,7 @@ Show **before** writing:
 
 Update:
 
-`composeApp/src/commonMain/kotlin/com/inspiredandroid/kai/inference/LocalModelCatalog.kt`
+`composeApp/src/commonMain/kotlin/com/kainext/duo/inference/LocalModelCatalog.kt`
 
 If sizes or display names used in `docs/features/on-device-inference.md` changed, update that table and **Last verified**.
 
@@ -68,12 +68,12 @@ Append a dated entry to [log.md](log.md) (newest first under today’s heading).
 
 ## 5. Verify
 
-1. `./gradlew :composeApp:compileKotlinDesktop`
-2. `./gradlew :composeApp:desktopTest --tests '*LocalModel*'`
+1. `./gradlew :composeApp:compileAndroidMain`
+2. `./gradlew :composeApp:testAndroidHostTest --tests '*LocalModel*'`
 3. `./gradlew spotlessApply`
 4. On green tests, set on [models.md](models.md):
 
-   `verified: { by: process:desktopTest-LocalModel, at: <ISO-8601 UTC> }`
+   `verified: { by: process:testAndroidHostTest-LocalModel, at: <ISO-8601 UTC> }`
 
 # Hard rules
 
