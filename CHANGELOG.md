@@ -28,6 +28,7 @@
 - Strip the project to the Android app: iOS, desktop, WebAssembly and their test harnesses are removed, along with the DMG/MSI/DEB/RPM/AppImage/Flatpak release jobs and the winget, flatpak and AUR workflows
 - Update the feature docs for goals, task lists, subagents, tool approval, context folding, team mode and Kai Build, and drop the desktop release smoke test
 - Drop the screen-capture strings and the accessibility label that nothing read, and give the capture notification a Simplified and Traditional Chinese wording
+- Projection screenshots keep the newest 20 in the cache instead of accumulating for however long the automation runs
 - Streaming answers reach the UI on a fixed cadence instead of once per token, so a long reply no longer rebuilds the transcript, the markdown document and the stats strip hundreds of times
 - The chat screen derives its reasoning groups, tool summaries and submission pairings only when those slices actually change, instead of on every streamed frame
 - The active service, its model and the accepted file extensions are read from settings without re-parsing the same JSON on every frame

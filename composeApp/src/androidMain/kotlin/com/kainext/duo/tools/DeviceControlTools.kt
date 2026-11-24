@@ -547,12 +547,32 @@ class AndroidUiTool(private val shell: PrivilegedShell) : Tool {
         }.getOrNull() ?: return null
         val file = java.io.File(context.cacheDir, "kai_screenshot_${System.currentTimeMillis()}.png")
         if (!runCatching { file.writeBytes(bytes) }.isSuccess) return null
+        pruneProjectionScreenshots(context.cacheDir)
         return screenshotReply(
             path = file.absolutePath,
             backend = "projection",
             file = file,
             includeBase64 = includeBase64,
         )
+    }
+
+    /**
+     * Keeps the newest handful of projection screenshots.
+     *
+     * A screenshot is read once, by the model that asked for it; nothing in the app opens an older
+     * one. They still accumulate — an automation loop can take them faster than the cache fills and
+     * Android's own trimming runs on its schedule, not ours — so the older ones are dropped here
+     * where the cost of listing the directory is already being paid.
+     */
+    private fun pruneProjectionScreenshots(dir: java.io.File) {
+        val stale = dir.listFiles { candidate ->
+            candidate.isFile &&
+                candidate.name.startsWith("kai_screenshot_") &&
+                candidate.name.endsWith(".png")
+        }?.sortedByDescending { it.lastModified() }
+            ?.drop(MAX_KEPT_SCREENSHOTS)
+            ?: return
+        stale.forEach { it.delete() }
     }
 
     /**
@@ -695,6 +715,9 @@ class AndroidUiTool(private val shell: PrivilegedShell) : Tool {
         private const val FOREGROUND_POLL_MS = 200L
         private const val FOREGROUND_POLL_SHELL_MS = 600L
         private const val MAX_INLINE_SCREENSHOT_BYTES = 6_000_000L
+
+        /** How many projection screenshots to leave in the cache; see `pruneProjectionScreenshots`. */
+        private const val MAX_KEPT_SCREENSHOTS = 20
     }
 }
 
