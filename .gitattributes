@@ -1,0 +1,22 @@
+# Normalize line endings: the repository stores LF, and CI runs on Linux.
+# Without this, a Windows checkout leaves CRLF on disk and every file shows as
+# modified even though no content changed, which buries real diffs.
+* text=auto eol=lf
+
+# Binary assets must never be line-ending converted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+*.jar binary
+*.apk binary
+*.aab binary
+*.keystore binary
+*.jks binary
