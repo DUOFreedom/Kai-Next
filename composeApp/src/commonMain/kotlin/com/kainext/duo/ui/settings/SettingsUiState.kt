@@ -151,6 +151,10 @@ data class SettingsUiState(
     val isProbingDeviceControl: Boolean = false,
     // Goals (目标/计划)
     val goals: ImmutableList<Goal> = persistentListOf(),
+
+    // Screen capture (MediaProjection)
+    val isScreenCaptureSupported: Boolean = false,
+    val isScreenCaptureActive: Boolean = false,
 )
 
 @Immutable
@@ -216,4 +220,14 @@ data class SettingsModel(
     val isManualEntry: Boolean = false,
     /** Per-model thinking/reasoning effort. Defaults to MEDIUM for models that support it. */
     val thinkingEffort: ThinkingEffort = ThinkingEffort.MEDIUM,
+    /** Whether the model supports vision (image input). */
+    val supportsVision: Boolean = false,
+    /** Whether the model supports function calling / tools. */
+    val supportsFunctionCalling: Boolean = false,
+    /** Whether the model supports thinking/reasoning mode. */
+    val supportsThinking: Boolean = false,
+    /** Whether the model supports audio input. */
+    val supportsAudio: Boolean = false,
+    /** Max output tokens if known (null = unknown). */
+    val maxOutputTokens: Long? = null,
 )

@@ -50,12 +50,6 @@ data class UiNode(
     val enabled: Boolean = true,
 ) {
     /**
-     * Every string a user could reasonably call this control by, in priority order: visible
-     * text first (that is what the user reads), then the accessibility description, then the
-     * resource id (which the model only ever sees if it dumped the tree, but which is the most
-     * stable handle across re-renders).
-     */
-    /**
      * The map form handed to the model as a tool result.
      *
      * Null and false values are omitted: a screen of 60 nodes would otherwise carry ~600 bytes of

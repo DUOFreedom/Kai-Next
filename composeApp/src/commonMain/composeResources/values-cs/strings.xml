@@ -442,7 +442,7 @@
     <string name="kai_build_setup_agents_title">Kódovací agenti</string>
     <string name="kai_build_setup_agents_description">Vyberte CLI k instalaci na čistý systém. Ostatní můžete přidat později.</string>
     <string name="kai_build_setup_install">Nainstalovat Debian</string>
-    <string name="kai_build_step_download">Stahuji Debian… %1$d%%</string>
+    <string name="kai_build_step_download">Stahuji Debian… %1$s</string>
     <string name="kai_build_step_extract">Rozbaluji rootfs…</string>
     <string name="kai_build_step_configure">Konfiguruji Debian…</string>
     <string name="kai_build_step_base_packages">Instaluji základní balíčky…</string>

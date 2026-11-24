@@ -44,9 +44,8 @@ import com.kainext.duo.network.OpenAICompatibleModelNotFoundException
 import com.kainext.duo.network.OpenAICompatibleQuotaExhaustedException
 import com.kainext.duo.network.OpenAICompatibleRequestTooLargeException
 import com.kainext.duo.network.Requests
-import com.kainext.duo.network.StreamChatOutcome
-import com.kainext.duo.overlay.OverlayController
 import com.kainext.duo.network.ServiceCredentials
+import com.kainext.duo.network.StreamChatOutcome
 import com.kainext.duo.network.UnsupportedFileTypeException
 import com.kainext.duo.network.dtos.anthropic.extractText
 import com.kainext.duo.network.dtos.gemini.extractText
@@ -55,6 +54,7 @@ import com.kainext.duo.network.dtos.openairesponses.OpenAIResponsesResponseDto
 import com.kainext.duo.network.toUiError
 import com.kainext.duo.network.tools.Tool
 import com.kainext.duo.network.tools.ToolInfo
+import com.kainext.duo.overlay.OverlayController
 import com.kainext.duo.skills.RegistrySkillEntry
 import com.kainext.duo.skills.SkillManager
 import com.kainext.duo.skills.SkillManifest
@@ -85,12 +85,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.offsetAt
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.serializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -102,6 +103,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import kotlinx.serialization.serializer
 import org.jetbrains.compose.resources.getString
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -112,9 +114,7 @@ import kotlin.time.ExperimentalTime
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-private const val MAX_TOOL_ITERATIONS = 15
 private const val MIN_TOOL_DISPLAY_MS = 2000L
-private const val MAX_REPEATED_TOOL_CALLS = 3
 private const val MAX_API_RETRIES = 2
 private const val MAX_HEARTBEAT_MESSAGES = 50
 private const val ESTIMATED_CHARS_PER_TOKEN = 4
@@ -267,6 +267,7 @@ class RemoteDataRepository(
     private val skillManager: SkillManager,
     private val sandboxController: SandboxController,
     private val localInferenceEngine: LocalInferenceEngine? = null,
+    private val contextFoldStore: ContextFoldStore,
 ) : DataRepository {
 
     private val prettyJson = Json { prettyPrint = true }
@@ -320,6 +321,15 @@ class RemoteDataRepository(
     )
 
     override val chatHistory: MutableStateFlow<List<History>> = MutableStateFlow(emptyList())
+
+    /**
+     * Last result of [supportedFileExtensions], keyed by the service and model it was derived from.
+     *
+     * The chat state asks for this list on every rebuild, and a rebuild happens on every streamed
+     * delta. Deriving it walks the configured instances and the model capability table, so the answer
+     * is memoized on the only two inputs that can change it.
+     */
+    private var cachedFileExtensions: Triple<String, String, List<String>>? = null
 
     private val _currentConversationId = MutableStateFlow<String?>(null)
     override val currentConversationId: StateFlow<String?> = _currentConversationId
@@ -569,10 +579,17 @@ class RemoteDataRepository(
     private fun updateModelsForInstance(instanceId: String, models: List<SettingsModel>, service: Service? = null) {
         val selectedModelId = appSettings.getInstanceModelId(instanceId)
         val withSelected = ensureSelectedModelPresent(models, selectedModelId)
-            // Apply per-model saved thinking effort so the picker shows the user's choice.
+            // Apply the user's per-model overrides so the picker and the request path agree:
+            // thinking effort, context window and output cap are all stored per model id.
             .map { model ->
-                val saved = appSettings.getThinkingEffort(model.id)
-                model.copy(thinkingEffort = saved)
+                val savedEffort = appSettings.getThinkingEffort(model.id)
+                val savedContext = appSettings.getModelContextTokens(model.id)
+                val savedMaxOutput = appSettings.getModelMaxOutputTokens(model.id)
+                model.copy(
+                    thinkingEffort = savedEffort,
+                    contextWindow = if (savedContext > 0) savedContext.toLong() else model.contextWindow,
+                    maxOutputTokens = if (savedMaxOutput > 0) savedMaxOutput.toLong() else model.maxOutputTokens,
+                )
             }
         val flow = modelsByInstance.getOrPut(instanceId) { MutableStateFlow(emptyList()) }
         flow.update { withSelected }
@@ -887,14 +904,25 @@ class RemoteDataRepository(
                 }
             } else {
                 history.update { current ->
-                    current.map { entry ->
-                        if (entry.id == placeholderId) {
-                            entry.copy(
-                                content = text,
-                                reasoningContent = reasoning ?: entry.reasoningContent,
-                            )
-                        } else {
-                            entry
+                    val last = current.lastOrNull()
+                    if (last?.id == placeholderId) {
+                        // The placeholder is always the tail during streaming, so replacing just the
+                        // last slot avoids allocating a new list of every earlier turn on each
+                        // delta. Falls back to the full rewrite if anything appended after it.
+                        current.dropLast(1) + last.copy(
+                            content = text,
+                            reasoningContent = reasoning ?: last.reasoningContent,
+                        )
+                    } else {
+                        current.map { entry ->
+                            if (entry.id == placeholderId) {
+                                entry.copy(
+                                    content = text,
+                                    reasoningContent = reasoning ?: entry.reasoningContent,
+                                )
+                            } else {
+                                entry
+                            }
                         }
                     }
                 }
@@ -917,6 +945,7 @@ class RemoteDataRepository(
             sessionId = sessionId,
             reasoningEffort = reasoningEffort,
             requestTimeoutMs = requestTimeoutMs,
+            maxOutputTokens = maxOutputTokensFor(credentials.modelId),
             onDelta = { text, reasoning -> render(text, reasoning) },
         )
 
@@ -992,6 +1021,7 @@ class RemoteDataRepository(
                         messages = messages.map { it.toGeminiMessageDto() },
                         systemInstruction = systemPrompt,
                         requestTimeoutMs = requestTimeoutMs,
+                        maxOutputTokens = maxOutputTokensFor(credentials.modelId),
                     ).getOrThrow()
                 }
                 AssistantTurn(response.extractText())
@@ -1004,6 +1034,7 @@ class RemoteDataRepository(
                         messages = buildAnthropicMessages(messages),
                         systemInstruction = systemPrompt,
                         requestTimeoutMs = requestTimeoutMs,
+                        maxOutputTokens = maxOutputTokensFor(credentials.modelId),
                     ).getOrThrow()
                 }
                 AssistantTurn(response.extractText())
@@ -1016,7 +1047,14 @@ class RemoteDataRepository(
                 if (requiresResponsesApi(service, credentials.modelId, credentials.baseUrl)) {
                     val startedAt = Clock.System.now().toEpochMilliseconds()
                     val response = call {
-                        requests.openAIResponses(service, credentials, toResponsesInput(openAIMessages), reasoningEffort = reasoningEffort, requestTimeoutMs = requestTimeoutMs).getOrThrow()
+                        requests.openAIResponses(
+                            service,
+                            credentials,
+                            toResponsesInput(openAIMessages),
+                            reasoningEffort = reasoningEffort,
+                            requestTimeoutMs = requestTimeoutMs,
+                            maxOutputTokens = maxOutputTokensFor(credentials.modelId),
+                        ).getOrThrow()
                     }
                     val elapsedMs = Clock.System.now().toEpochMilliseconds() - startedAt
                     response.throwIfFailed(service)
@@ -1052,6 +1090,7 @@ class RemoteDataRepository(
                         sessionId = sessionId,
                         reasoningEffort = reasoningEffort,
                         requestTimeoutMs = requestTimeoutMs,
+                        maxOutputTokens = maxOutputTokensFor(credentials.modelId),
                     ).getOrThrow()
                 }
                 val elapsedMs = Clock.System.now().toEpochMilliseconds() - startedAt
@@ -1218,7 +1257,7 @@ class RemoteDataRepository(
                 // On-device models handle their own context limits, so skip this check for them
                 if (!entry.service.isOnDevice) {
                     val creds = instanceCredentials(entry.instanceId, entry.service)
-                    val entryWindowChars = ModelCatalog.estimateContextWindow(creds.modelId) * ESTIMATED_CHARS_PER_TOKEN
+                    val entryWindowChars = contextWindowFor(creds.modelId) * ESTIMATED_CHARS_PER_TOKEN
                     if (historyChars > entryWindowChars) {
                         lastException = ContextWindowExceededException()
                         _fallbackStatus.value = FallbackStatus(
@@ -1288,7 +1327,7 @@ class RemoteDataRepository(
         reasoningEffort: String? = null,
         history: MutableStateFlow<List<History>> = chatHistory,
     ): AssistantTurn {
-        val contextWindowTokens = ModelCatalog.estimateContextWindow(credentials.modelId)
+        val contextWindowTokens = contextWindowFor(credentials.modelId)
         val declaredToolNames = tools.map { it.schema.name }.toSet()
         // GPT-5.6 and friends reject function tools on chat completions; the same messages are
         // translated to Responses API items instead. Everything before the wire call — prompt
@@ -1302,7 +1341,14 @@ class RemoteDataRepository(
                     // startedAt/elapsedMs further down, so it cannot borrow those.
                     val responsesStartedAt = Clock.System.now().toEpochMilliseconds()
                     val response = retryApiCall {
-                        requests.openAIResponses(service, credentials, toResponsesInput(msgs), tools, reasoningEffort).getOrThrow()
+                        requests.openAIResponses(
+                            service,
+                            credentials,
+                            toResponsesInput(msgs),
+                            tools,
+                            reasoningEffort,
+                            maxOutputTokens = maxOutputTokensFor(credentials.modelId),
+                        ).getOrThrow()
                     }
                     response.throwIfFailed(service)
                     val responsesElapsedMs = Clock.System.now().toEpochMilliseconds() - responsesStartedAt
@@ -1332,6 +1378,7 @@ class RemoteDataRepository(
                         tools,
                         sessionId = sessionId,
                         reasoningEffort = reasoningEffort,
+                        maxOutputTokens = maxOutputTokensFor(credentials.modelId),
                     ).getOrThrow()
                 }
                 val elapsedMs = Clock.System.now().toEpochMilliseconds() - startedAt
@@ -1378,7 +1425,7 @@ class RemoteDataRepository(
         systemPrompt: String? = null,
         history: MutableStateFlow<List<History>> = chatHistory,
     ): AssistantTurn {
-        val contextWindowTokens = ModelCatalog.estimateContextWindow(credentials.modelId)
+        val contextWindowTokens = contextWindowFor(credentials.modelId)
         val strategy = object : ToolLoopStrategy {
             override suspend fun chat(history: List<History>, systemPrompt: String?): LoopChatResult {
                 val geminiMessages = history.map { it.toGeminiMessageDto() }
@@ -1388,6 +1435,7 @@ class RemoteDataRepository(
                         messages = geminiMessages,
                         tools = tools,
                         systemInstruction = systemPrompt,
+                        maxOutputTokens = maxOutputTokensFor(credentials.modelId),
                     ).getOrThrow()
                 }
                 val parts = response.candidates.firstOrNull()?.content?.parts.orEmpty()
@@ -1420,7 +1468,7 @@ class RemoteDataRepository(
         systemPrompt: String? = null,
         history: MutableStateFlow<List<History>> = chatHistory,
     ): AssistantTurn {
-        val contextWindowTokens = ModelCatalog.estimateContextWindow(credentials.modelId)
+        val contextWindowTokens = contextWindowFor(credentials.modelId)
         val strategy = object : ToolLoopStrategy {
             override suspend fun chat(history: List<History>, systemPrompt: String?): LoopChatResult {
                 val msgs = buildAnthropicMessages(history)
@@ -1430,6 +1478,7 @@ class RemoteDataRepository(
                         messages = msgs,
                         tools = tools,
                         systemInstruction = systemPrompt,
+                        maxOutputTokens = maxOutputTokensFor(credentials.modelId),
                     ).getOrThrow()
                 }
                 val toolUseBlocks = response.content.filter { it.type == "tool_use" }
@@ -1458,6 +1507,10 @@ class RemoteDataRepository(
         history: MutableStateFlow<List<History>>,
     ): AssistantTurn {
         var iteration = 0
+        // Limits are user-tunable (Settings > Tools); read them once per turn so a
+        // mid-conversation change applies from the next message onward.
+        val maxIterations = appSettings.getMaxToolIterations()
+        val maxRepeatedToolCalls = appSettings.getMaxRepeatedToolCalls()
         val recentSignatures = mutableListOf<String>()
         while (true) {
             iteration++
@@ -1467,7 +1520,7 @@ class RemoteDataRepository(
                     ?.let { trimHistoryForContext(full, systemPrompt?.length ?: 0, it).ifEmpty { full } }
                     ?: full
             }
-            if (iteration > MAX_TOOL_ITERATIONS) {
+            if (iteration > maxIterations) {
                 return AssistantTurn(strategy.bailout(visible, systemPrompt, BailoutReason.LIMIT_REACHED))
             }
             val result = strategy.chat(visible, systemPrompt)
@@ -1479,7 +1532,7 @@ class RemoteDataRepository(
             }
 
             val signatures = result.toolCalls.map { "${it.name}:${it.arguments.hashCode()}" }
-            if (isRepeatingToolCalls(recentSignatures, signatures)) {
+            if (isRepeatingToolCalls(recentSignatures, signatures, maxRepeatedToolCalls)) {
                 return AssistantTurn(strategy.bailout(visible, systemPrompt, BailoutReason.REPEATING))
             }
             recentSignatures.addAll(signatures)
@@ -1496,6 +1549,12 @@ class RemoteDataRepository(
                         ),
                     )
                 }
+            }
+
+            // The floating window shows this line pinned above the tool log: it is the model's own
+            // account of the step, which is what a user watching another app can actually read.
+            if (result.textContent.isNotBlank()) {
+                OverlayController.narrate(result.textContent)
             }
 
             val toolResults = executeToolCallsInParallel(
@@ -1526,7 +1585,11 @@ class RemoteDataRepository(
     /**
      * Detects if the current batch of tool calls is repeating a recent pattern.
      */
-    private fun isRepeatingToolCalls(recentSignatures: List<String>, currentSignatures: List<String>): Boolean {
+    private fun isRepeatingToolCalls(
+        recentSignatures: List<String>,
+        currentSignatures: List<String>,
+        maxRepeatedToolCalls: Int,
+    ): Boolean {
         if (currentSignatures.isEmpty()) return false
         // Count how many consecutive times the same signature set appeared at the tail
         val batchSize = currentSignatures.size
@@ -1542,7 +1605,7 @@ class RemoteDataRepository(
             }
         }
         // +1 for the current batch that's about to be executed
-        return consecutiveCount + 1 >= MAX_REPEATED_TOOL_CALLS
+        return consecutiveCount + 1 >= maxRepeatedToolCalls
     }
 
     /**
@@ -1566,7 +1629,13 @@ class RemoteDataRepository(
         }
         if (useResponsesApi) {
             val response = retryApiCall {
-                requests.openAIResponses(service, credentials, toResponsesInput(bailoutMessages), reasoningEffort = reasoningEffort).getOrThrow()
+                requests.openAIResponses(
+                    service,
+                    credentials,
+                    toResponsesInput(bailoutMessages),
+                    reasoningEffort = reasoningEffort,
+                    maxOutputTokens = maxOutputTokensFor(credentials.modelId),
+                ).getOrThrow()
             }
             response.throwIfFailed(service)
             return response.outputText.orEmpty()
@@ -1579,6 +1648,7 @@ class RemoteDataRepository(
                 bailoutMessages,
                 sessionId = sessionId,
                 reasoningEffort = reasoningEffort,
+                maxOutputTokens = maxOutputTokensFor(credentials.modelId),
             ).getOrThrow()
         }
         return response.choices.firstOrNull()?.message?.effectiveContent ?: ""
@@ -1620,13 +1690,19 @@ class RemoteDataRepository(
         // Mirror the run into the floating window: the user cannot see the chat while the agent
         // is operating another app, so the window is their only view of what is happening.
         toolCalls.forEach { (_, name, _) ->
-            OverlayController.log("→ ${toolExecutor.getToolDisplayName(name)}")
+            OverlayController.logTool("→ ${toolExecutor.getToolDisplayName(name)}")
         }
         try {
+            // Bounded fan-out: the model can ask for a dozen independent calls in one turn, and
+            // running them all at once on a phone contends for the same cores and memory. The limit
+            // is user-tunable; the semaphore still starts every call so ordering stays as emitted.
+            val permits = Semaphore(appSettings.getToolParallelLimit())
             val results = coroutineScope {
                 toolCalls.map { (callId, name, arguments) ->
                     async {
-                        val result = toolExecutor.executeTool(name, arguments, conversationIdSnapshot)
+                        val result = permits.withPermit {
+                            toolExecutor.executeTool(name, arguments, conversationIdSnapshot)
+                        }
                         Triple(callId, name, result)
                     }
                 }.awaitAll()
@@ -1634,7 +1710,7 @@ class RemoteDataRepository(
             results.forEach { (_, name, result) ->
                 val text = result.toString()
                 val failed = text.contains("\"success\":false") || text.contains("error")
-                OverlayController.log(
+                OverlayController.logResult(
                     text = "← ${toolExecutor.getToolDisplayName(name)}${if (failed) " (failed)" else ""}",
                     isError = failed,
                 )
@@ -1805,15 +1881,16 @@ class RemoteDataRepository(
     /**
      * Compacts chat history by summarizing older messages via an LLM call when the history
      * exceeds a percentage of the context window. Keeps recent exchanges verbatim and replaces
-     * older ones with a single summary. If summarization fails, drops the older turns only when the
-     * history no longer fits the context window; cancellation propagates without touching history.
+     * older ones with a single summary that references a stored fold block (reversible via
+     * search_context / decompress tools). If summarization fails, drops the older turns only when
+     * the history no longer fits the context window; cancellation propagates without touching history.
      */
     private suspend fun compactHistoryIfNeeded() {
         // Use primary service's context window for compaction decisions
         val firstInstance = getConfiguredServiceInstances().firstOrNull() ?: return
         val service = Service.fromId(firstInstance.serviceId)
         val modelId = appSettings.getSelectedModelId(service)
-        val contextWindowTokens = ModelCatalog.estimateContextWindow(modelId)
+        val contextWindowTokens = contextWindowFor(modelId)
 
         val history = chatHistory.value.filter { it.role != History.Role.TOOL_EXECUTING }
         val systemPromptChars = getActiveSystemPrompt()?.length ?: 0
@@ -1855,9 +1932,18 @@ class RemoteDataRepository(
             return
         }
 
+        // Store the folded block so it can be searched / decompressed later
+        val conversationId = _currentConversationId.value
+        val block = contextFoldStore.append(
+            conversationId = conversationId,
+            summary = summary,
+            transcript = transcript,
+            coveredMessages = olderMessages.size,
+        )
+
         val summaryEntry = History(
             role = History.Role.ASSISTANT,
-            content = "[Conversation summary: $summary]",
+            content = "[Conversation summary (folded, block ${block.id}): $summary]",
         )
 
         chatHistory.value = listOf(summaryEntry) + recentMessages
@@ -1926,11 +2012,21 @@ class RemoteDataRepository(
     override fun supportedFileExtensions(): List<String> {
         val service = currentService()
         if (service.isOnDevice) return emptyList()
+        // The chat state rebuilds itself on every streamed delta and asks for this list each time,
+        // while the answer that matters (service + model) only changes when the user switches. Key
+        // the result on that pair so streaming does not re-derive the same list twelve times a
+        // second.
+        val modelId = currentModelId()
+        cachedFileExtensions?.let { (cachedService, cachedModel, cached) ->
+            if (cachedService == service.id && cachedModel == modelId) return cached
+        }
         // Images are offered only when both the service and the active model accept them —
         // mixed services (e.g. Z.AI) pair text-only models with multimodal ones.
-        val imagesSupported = service.supportsImages && modelSupportsImages(currentModelId())
+        val imagesSupported = service.supportsImages && modelSupportsImages(modelId)
         val base = if (imagesSupported) supportedFileExtensions else supportedFileExtensions - imageExtensions
-        return if (service.supportsPdf) base + "pdf" else base
+        val result = if (service.supportsPdf) base + "pdf" else base
+        cachedFileExtensions = Triple(service.id, modelId, result)
+        return result
     }
 
     override fun currentService(): Service {
@@ -2659,6 +2755,25 @@ class RemoteDataRepository(
         appSettings.setModelContextTokens(modelId, contextTokens)
     }
 
+    override fun getModelMaxOutputTokens(modelId: String): Int = appSettings.getModelMaxOutputTokens(modelId)
+
+    override fun setModelMaxOutputTokens(modelId: String, maxOutputTokens: Int) {
+        appSettings.setModelMaxOutputTokens(modelId, maxOutputTokens)
+    }
+
+    /**
+     * Context window actually used for trimming: a positive user override wins over the catalog
+     * estimate, so raising the slider really gives the model more room instead of only changing a
+     * label in the details sheet.
+     */
+    private fun contextWindowFor(modelId: String): Int {
+        val stored = appSettings.getModelContextTokens(modelId)
+        return if (stored > 0) stored else ModelCatalog.estimateContextWindow(modelId)
+    }
+
+    /** User requested output cap, or null when the model's own default should apply. */
+    private fun maxOutputTokensFor(modelId: String): Int? = appSettings.getModelMaxOutputTokens(modelId).takeIf { it > 0 }
+
     override fun getThinkingEffort(modelId: String): ThinkingEffort = appSettings.getThinkingEffort(modelId)
 
     override fun setThinkingEffort(modelId: String, effort: ThinkingEffort) {
@@ -2740,4 +2855,16 @@ class RemoteDataRepository(
     override fun isUiAutomationEnabled(): Boolean = appSettings.isUiAutomationEnabled()
 
     override fun setUiAutomationEnabled(enabled: Boolean) = appSettings.setUiAutomationEnabled(enabled)
+
+    // Screen capture (MediaProjection)
+    override fun isScreenCaptureSupported(): Boolean = deviceControlManager.isScreenCaptureSupported()
+
+    override val screenCaptureActive: kotlinx.coroutines.flow.StateFlow<Boolean> =
+        deviceControlManager.screenCaptureActive
+
+    override fun isScreenCaptureActive(): Boolean = deviceControlManager.isScreenCaptureActive()
+
+    override fun requestScreenCapture(): Boolean = deviceControlManager.requestScreenCapture()
+
+    override fun stopScreenCapture() = deviceControlManager.stopScreenCapture()
 }

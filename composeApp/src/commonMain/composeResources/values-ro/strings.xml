@@ -441,7 +441,7 @@
     <string name="kai_build_setup_agents_title">Agenți de cod</string>
     <string name="kai_build_setup_agents_description">Alege CLI-urile de instalat pe sistemul nou. Pe celelalte le poți adăuga mai târziu.</string>
     <string name="kai_build_setup_install">Instalează Debian</string>
-    <string name="kai_build_step_download">Se descarcă Debian… %1$d%%</string>
+    <string name="kai_build_step_download">Se descarcă Debian… %1$s</string>
     <string name="kai_build_step_extract">Se extrage rootfs…</string>
     <string name="kai_build_step_configure">Se configurează Debian…</string>
     <string name="kai_build_step_base_packages">Se instalează pachetele de bază…</string>

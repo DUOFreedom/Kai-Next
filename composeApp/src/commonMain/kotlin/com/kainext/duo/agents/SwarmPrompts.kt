@@ -154,10 +154,15 @@ internal object SwarmPrompts {
             val c = raw[i]
             when {
                 escaped -> escaped = false
+
                 c == '\\' && inString -> escaped = true
+
                 c == '"' -> inString = !inString
+
                 inString -> Unit
+
                 c == '{' -> depth++
+
                 c == '}' -> {
                     depth--
                     if (depth == 0) {

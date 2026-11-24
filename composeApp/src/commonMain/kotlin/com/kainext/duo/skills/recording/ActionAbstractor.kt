@@ -1,7 +1,7 @@
 package com.kainext.duo.skills.recording
 
-import kotlin.math.abs
 import kotlinx.serialization.Serializable
+import kotlin.math.abs
 
 /**
  * Dominant axis of a drag gesture, derived from the relative start/end points.

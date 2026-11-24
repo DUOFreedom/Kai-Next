@@ -8,7 +8,15 @@ data class GeminiChatRequestDto(
     val contents: List<Content>,
     val tools: List<GeminiTool>? = null,
     val systemInstruction: Content? = null,
+    /** Omitted entirely when the caller has not set a per-model output cap. */
+    val generationConfig: GenerationConfig? = null,
 ) {
+    @Serializable
+    data class GenerationConfig(
+        @kotlinx.serialization.SerialName("maxOutputTokens")
+        val maxOutputTokens: Int? = null,
+    )
+
     @Serializable
     data class Content(
         val parts: List<Part>,

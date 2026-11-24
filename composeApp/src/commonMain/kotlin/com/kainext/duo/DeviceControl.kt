@@ -1,5 +1,7 @@
 package com.kainext.duo
 
+import kotlinx.coroutines.flow.StateFlow
+
 /**
  * Result of probing the device for privileged-access backends. Android is the only
  * platform the app ships on now, but the interface lives in commonMain so Settings
@@ -55,6 +57,43 @@ expect class DeviceControlManager() {
 
     /** Hides the floating control window. */
     fun hideOverlay()
+
+    // Screen capture (MediaProjection)
+
+    /**
+     * True when the platform can hand out a projection at all. MediaProjection has existed since
+     * API 21, so every device this app installs on answers true; the check stays so a future
+     * platform floor can move without touching callers.
+     */
+    fun isScreenCaptureSupported(): Boolean
+
+    /**
+     * Whether a projection is live right now, updated when capture starts or stops — including a
+     * stop the user makes from the system UI. A one-shot read goes stale the moment it returns,
+     * which is why the UI watches this instead of polling [isScreenCaptureActive].
+     */
+    val screenCaptureActive: StateFlow<Boolean>
+
+    /** True while a projection is live and frames are available. */
+    fun isScreenCaptureActive(): Boolean
+
+    /**
+     * Shows the system consent dialog and starts the capture service on success.
+     * Returns false when there is no activity to show the dialog from.
+     */
+    fun requestScreenCapture(): Boolean
+
+    /** Stops the capture service and drops the notification. Safe to call when nothing is running. */
+    fun stopScreenCapture()
+
+    /**
+     * PNG bytes of the latest frame from the live projection, or null when nothing is capturing.
+     *
+     * Bytes rather than a bitmap object because this interface sits in commonMain: a platform
+     * image type here would drag Android into the shared module and break the moment another
+     * target comes back.
+     */
+    suspend fun captureScreen(): ByteArray?
 }
 
 expect fun createDeviceControlManager(): DeviceControlManager

@@ -443,7 +443,7 @@
     <string name="kai_build_setup_agents_title">የኮድ ወኪሎች</string>
     <string name="kai_build_setup_agents_description">በአዲሱ ስርዓት ላይ የሚጫኑ CLIዎችን ይምረጡ። ሌሎቹን በኋላ ማከል ይችላሉ።</string>
     <string name="kai_build_setup_install">Debian ጫን</string>
-    <string name="kai_build_step_download">Debian በማውረድ ላይ… %1$d%%</string>
+    <string name="kai_build_step_download">Debian በማውረድ ላይ… %1$s</string>
     <string name="kai_build_step_extract">rootfs በማውጣት ላይ…</string>
     <string name="kai_build_step_configure">Debian በማዋቀር ላይ…</string>
     <string name="kai_build_step_base_packages">መሰረታዊ ፓኬጆች በመጫን ላይ…</string>

@@ -194,42 +194,41 @@ class PrivilegedShell(
         return collect(process, timeoutMs, backend)
     }
 
-    private suspend fun collect(process: Process, timeoutMs: Long, backend: String): PrivilegedResult =
-        withContext(Dispatchers.IO) {
-            val stdout = StringBuilder()
-            val stderr = StringBuilder()
-            val outThread = thread(name = "priv-shell-out", isDaemon = true) {
-                runCatching {
-                    process.inputStream.bufferedReader().forEachLine { stdout.appendLine(it) }
-                }
+    private suspend fun collect(process: Process, timeoutMs: Long, backend: String): PrivilegedResult = withContext(Dispatchers.IO) {
+        val stdout = StringBuilder()
+        val stderr = StringBuilder()
+        val outThread = thread(name = "priv-shell-out", isDaemon = true) {
+            runCatching {
+                process.inputStream.bufferedReader().forEachLine { stdout.appendLine(it) }
             }
-            val errThread = thread(name = "priv-shell-err", isDaemon = true) {
-                runCatching {
-                    process.errorStream.bufferedReader().forEachLine { stderr.appendLine(it) }
-                }
-            }
-            val finished = try {
-                process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
-            } catch (_: InterruptedException) {
-                false
-            }
-            if (!finished) {
-                process.destroyForcibly()
-            }
-            outThread.join(1_000)
-            errThread.join(1_000)
-            val exit = try {
-                if (finished) process.exitValue() else -1
-            } catch (_: Throwable) {
-                -1
-            }
-            PrivilegedResult(
-                stdout = stdout.toString().trimEnd(),
-                stderr = if (finished) stderr.toString().trimEnd() else "command timed out after ${timeoutMs}ms",
-                exitCode = exit,
-                backend = backend,
-            )
         }
+        val errThread = thread(name = "priv-shell-err", isDaemon = true) {
+            runCatching {
+                process.errorStream.bufferedReader().forEachLine { stderr.appendLine(it) }
+            }
+        }
+        val finished = try {
+            process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)
+        } catch (_: InterruptedException) {
+            false
+        }
+        if (!finished) {
+            process.destroyForcibly()
+        }
+        outThread.join(1_000)
+        errThread.join(1_000)
+        val exit = try {
+            if (finished) process.exitValue() else -1
+        } catch (_: Throwable) {
+            -1
+        }
+        PrivilegedResult(
+            stdout = stdout.toString().trimEnd(),
+            stderr = if (finished) stderr.toString().trimEnd() else "command timed out after ${timeoutMs}ms",
+            exitCode = exit,
+            backend = backend,
+        )
+    }
 
     /** Single-quotes [value] for safe interpolation into a `sh` command line. */
     fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"

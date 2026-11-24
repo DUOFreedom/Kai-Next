@@ -441,7 +441,7 @@
     <string name="kai_build_setup_agents_title">เอเจนต์เขียนโค้ด</string>
     <string name="kai_build_setup_agents_description">เลือก CLI ที่จะติดตั้งบนระบบใหม่ คุณสามารถเพิ่มอันอื่นทีหลังได้</string>
     <string name="kai_build_setup_install">ติดตั้ง Debian</string>
-    <string name="kai_build_step_download">กำลังดาวน์โหลด Debian… %1$d%%</string>
+    <string name="kai_build_step_download">กำลังดาวน์โหลด Debian… %1$s</string>
     <string name="kai_build_step_extract">กำลังแตก rootfs…</string>
     <string name="kai_build_step_configure">กำลังตั้งค่า Debian…</string>
     <string name="kai_build_step_base_packages">กำลังติดตั้งแพ็กเกจพื้นฐาน…</string>

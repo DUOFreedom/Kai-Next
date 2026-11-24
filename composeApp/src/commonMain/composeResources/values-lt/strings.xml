@@ -441,7 +441,7 @@
     <string name="kai_build_setup_agents_title">Kodavimo agentai</string>
     <string name="kai_build_setup_agents_description">Pasirinkite CLI diegti švarioje sistemoje. Kitus galite pridėti vėliau.</string>
     <string name="kai_build_setup_install">Įdiegti Debian</string>
-    <string name="kai_build_step_download">Atsisiunčiama Debian… %1$d%%</string>
+    <string name="kai_build_step_download">Atsisiunčiama Debian… %1$s</string>
     <string name="kai_build_step_extract">Išskleidžiamas rootfs…</string>
     <string name="kai_build_step_configure">Konfigūruojama Debian…</string>
     <string name="kai_build_step_base_packages">Diegiami baziniai paketai…</string>

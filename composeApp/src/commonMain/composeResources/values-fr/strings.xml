@@ -442,7 +442,7 @@ Si quelque chose nécessite de l'attention (souvenirs obsolètes, tâches échue
     <string name="kai_build_setup_agents_title">Agents de codage</string>
     <string name="kai_build_setup_agents_description">Choisissez les CLI à installer sur le système neuf. Vous pourrez ajouter les autres plus tard.</string>
     <string name="kai_build_setup_install">Installer Debian</string>
-    <string name="kai_build_step_download">Téléchargement de Debian… %1$d%%</string>
+    <string name="kai_build_step_download">Téléchargement de Debian… %1$s</string>
     <string name="kai_build_step_extract">Extraction du rootfs…</string>
     <string name="kai_build_step_configure">Configuration de Debian…</string>
     <string name="kai_build_step_base_packages">Installation des paquets de base…</string>

@@ -34,6 +34,9 @@ data class SettingsActions(
     val onKeepAccessibilityAlive: () -> Unit,
     val onToggleOverlay: (Boolean) -> Unit,
     val onOpenOverlaySettings: () -> Unit,
+    // Screen capture (MediaProjection)
+    val onRequestScreenCapture: () -> Unit,
+    val onStopScreenCapture: () -> Unit,
     val onToggleTool: (String, Boolean) -> Unit,
     val onSaveSoul: (String) -> Unit,
     val onToggleDynamicUi: (Boolean) -> Unit,
@@ -114,6 +117,9 @@ data class SettingsActions(
             onKeepAccessibilityAlive = {},
             onToggleOverlay = {},
             onOpenOverlaySettings = {},
+            // Screen capture (MediaProjection)
+            onRequestScreenCapture = {},
+            onStopScreenCapture = {},
             onToggleTool = { _, _ -> },
             onSaveSoul = {},
             onToggleDynamicUi = {},

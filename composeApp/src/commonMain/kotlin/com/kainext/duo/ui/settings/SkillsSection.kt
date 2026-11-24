@@ -43,7 +43,6 @@ import androidx.compose.ui.unit.dp
 import com.kainext.duo.skills.CreativeModeManager
 import com.kainext.duo.skills.RegistrySkillEntry
 import com.kainext.duo.skills.SkillManifest
-import kotlinx.collections.immutable.ImmutableList
 import com.kainext.duo.ui.KaiOutlinedTextField
 import com.kainext.duo.ui.components.VerticalScrollbarForScroll
 import com.kainext.duo.ui.handCursor
@@ -60,8 +59,8 @@ import kai.composeapp.generated.resources.settings_creative_mode_draft_name
 import kai.composeapp.generated.resources.settings_creative_mode_idle_prompt
 import kai.composeapp.generated.resources.settings_creative_mode_preview
 import kai.composeapp.generated.resources.settings_creative_mode_ready
-import kai.composeapp.generated.resources.settings_creative_mode_saved
 import kai.composeapp.generated.resources.settings_creative_mode_save
+import kai.composeapp.generated.resources.settings_creative_mode_saved
 import kai.composeapp.generated.resources.settings_creative_mode_start
 import kai.composeapp.generated.resources.settings_skills
 import kai.composeapp.generated.resources.settings_skills_add
@@ -83,6 +82,7 @@ import kai.composeapp.generated.resources.settings_skills_remove
 import kai.composeapp.generated.resources.settings_skills_search
 import kai.composeapp.generated.resources.settings_skills_search_empty
 import kai.composeapp.generated.resources.settings_skills_setup_sandbox
+import kotlinx.collections.immutable.ImmutableList
 import org.jetbrains.compose.resources.stringResource
 
 @Composable

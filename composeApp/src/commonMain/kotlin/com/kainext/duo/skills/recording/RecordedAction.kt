@@ -141,15 +141,23 @@ sealed interface RecordedAction {
  */
 fun RecordedAction.describeStep(): String = when (this) {
     is RecordedAction.TapText -> "tap \"$text\""
+
     is RecordedAction.TapDescription -> "tap element described as \"$description\""
+
     is RecordedAction.TapId -> "tap element with id \"$resourceId\""
+
     is RecordedAction.TapPoint -> "tap at ${percent(relativeX)}%, ${percent(relativeY)}% of the screen"
+
     is RecordedAction.Swipe ->
         "swipe from ${percent(fromRelativeX)}%, ${percent(fromRelativeY)}% " +
             "to ${percent(toRelativeX)}%, ${percent(toRelativeY)}% over ${durationMs}ms"
+
     is RecordedAction.InputText -> "type \"$value\""
+
     is RecordedAction.Key -> "press $name"
+
     is RecordedAction.Wait -> "wait ${ms}ms"
+
     is RecordedAction.LaunchApp -> "open app $packageName"
 }
 

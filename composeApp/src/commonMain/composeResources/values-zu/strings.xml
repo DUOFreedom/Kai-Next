@@ -441,7 +441,7 @@
     <string name="kai_build_setup_agents_title">Ama-ejenti ekhodi</string>
     <string name="kai_build_setup_agents_description">Khetha ama-CLI azofakwa kusistimu entsha. Ungangeza amanye kamuva.</string>
     <string name="kai_build_setup_install">Faka i-Debian</string>
-    <string name="kai_build_step_download">Ilanda i-Debian… %1$d%%</string>
+    <string name="kai_build_step_download">Ilanda i-Debian… %1$s</string>
     <string name="kai_build_step_extract">Ikhipha i-rootfs…</string>
     <string name="kai_build_step_configure">Ilungisa i-Debian…</string>
     <string name="kai_build_step_base_packages">Ifaka amaphakheji ayisisekelo…</string>

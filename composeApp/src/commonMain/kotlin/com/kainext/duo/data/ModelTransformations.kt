@@ -115,6 +115,11 @@ private fun buildSettingsModel(
         parameterCount = curated?.parameterCount,
         arenaScore = curated?.arenaScore,
         isFreeTier = FreeTierModels.isFreeTier(service, id),
+        supportsVision = curated?.supportsVision ?: false,
+        supportsFunctionCalling = curated?.supportsFunctionCalling ?: false,
+        supportsThinking = curated?.supportsThinking ?: false,
+        supportsAudio = curated?.supportsAudio ?: false,
+        maxOutputTokens = curated?.maxOutputTokens,
     )
 }
 

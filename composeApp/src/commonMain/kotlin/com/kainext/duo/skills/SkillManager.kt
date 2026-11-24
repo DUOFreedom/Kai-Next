@@ -155,7 +155,7 @@ class SkillManager(
      */
     suspend fun createSkill(draft: SkillDraft): Result<SkillManifest> = runCatching {
         val parsed = SkillFrontmatterParser.parse(
-            "---\nname: \"${draft.name}\"\ndescription: \"${draft.description}\"\n---\n\n${draft.body.trim()}"
+            "---\nname: \"${draft.name}\"\ndescription: \"${draft.description}\"\n---\n\n${draft.body.trim()}",
         ) as? SkillFrontmatterParser.Result.Ok
             ?: error("Invalid skill draft: name must be lowercase letters/digits/hyphens (≤64 chars), description non-empty (≤1024 chars)")
 

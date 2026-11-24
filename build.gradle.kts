@@ -23,6 +23,10 @@ configure<com.diffplug.gradle.spotless.SpotlessExtension> {
                     "ktlint_standard_discouraged-comment-location" to "disabled",
                     "ktlint_standard_value-argument-comment" to "disabled",
                     "ktlint_standard_value-parameter-comment" to "disabled",
+                    // Platform actuals use the "*.android.kt" suffix so the expect/actual pair is
+                    // visible from the filename; the rule would demand they be named after the
+                    // single class they contain instead.
+                    "ktlint_standard_filename" to "disabled",
                 ),
             )
     }

@@ -7,6 +7,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.ActivityResultCallback
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -22,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
+import com.kainext.duo.capture.ScreenCaptureController
 import com.kainext.duo.data.AppSettings
 import com.kainext.duo.data.DataRepository
 import com.kainext.duo.data.ThemeMode
@@ -36,10 +41,16 @@ import org.koin.android.ext.android.get
 
 class MainActivity : ComponentActivity() {
 
+    private val screenCaptureLauncher =
+        registerForActivityResult(StartActivityForResult()) { result: ActivityResult ->
+            ScreenCaptureController.onConsentResult(this, result.resultCode, result.data)
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         FileKit.init(this)
+        ScreenCaptureController.install { intent -> screenCaptureLauncher.launch(intent) }
         handleDeepLinkIntent(intent)
 
         val dynamicColor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -108,6 +119,11 @@ class MainActivity : ComponentActivity() {
         // close and reopen the app for scheduling to resume. `startForegroundService`
         // is idempotent when the service is already up.
         autoStartDaemon()
+    }
+
+    override fun onDestroy() {
+        ScreenCaptureController.uninstall()
+        super.onDestroy()
     }
 
     private fun autoStartDaemon() {

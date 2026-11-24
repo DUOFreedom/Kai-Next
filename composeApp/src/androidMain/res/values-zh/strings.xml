@@ -1,0 +1,6 @@
+<resources>
+    <string name="screen_capture_channel_name">屏幕捕获</string>
+    <string name="screen_capture_channel_description">Kai 为 AI 镜像屏幕时显示。</string>
+    <string name="screen_capture_notification_title">屏幕捕获已开启</string>
+    <string name="screen_capture_notification_text">AI 在工作时可以看见这个屏幕。</string>
+</resources>

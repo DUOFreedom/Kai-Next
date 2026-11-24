@@ -28,9 +28,9 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -127,7 +127,6 @@ import kai.composeapp.generated.resources.settings_free_fallback
 import kai.composeapp.generated.resources.settings_free_tier_description
 import kai.composeapp.generated.resources.settings_free_tier_title
 import kai.composeapp.generated.resources.settings_model_label
-import kai.composeapp.generated.resources.settings_thinking_effort_label
 import kai.composeapp.generated.resources.settings_open_app_settings
 import kai.composeapp.generated.resources.settings_openai_compatible_or_other_service
 import kai.composeapp.generated.resources.settings_openai_compatible_providers
@@ -144,6 +143,7 @@ import kai.composeapp.generated.resources.settings_status_error_invalid_key
 import kai.composeapp.generated.resources.settings_status_error_local_network
 import kai.composeapp.generated.resources.settings_status_error_quota_exhausted
 import kai.composeapp.generated.resources.settings_status_error_rate_limited
+import kai.composeapp.generated.resources.settings_thinking_effort_label
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.persistentListOf

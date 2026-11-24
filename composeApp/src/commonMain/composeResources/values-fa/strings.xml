@@ -442,7 +442,7 @@
     <string name="kai_build_setup_agents_title">عامل‌های کدنویسی</string>
     <string name="kai_build_setup_agents_description">CLIهایی را برای نصب روی سیستم تازه انتخاب کنید. بقیه را بعداً می‌توانید اضافه کنید.</string>
     <string name="kai_build_setup_install">نصب Debian</string>
-    <string name="kai_build_step_download">در حال دانلود Debian… %1$d%%</string>
+    <string name="kai_build_step_download">در حال دانلود Debian… %1$s</string>
     <string name="kai_build_step_extract">در حال استخراج rootfs…</string>
     <string name="kai_build_step_configure">در حال پیکربندی Debian…</string>
     <string name="kai_build_step_base_packages">در حال نصب بسته‌های پایه…</string>

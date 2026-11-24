@@ -20,6 +20,12 @@ data class OpenAICompatibleChatRequestDto(
      * Null (not `false`) is the default so providers that reject unknown fields never see the key.
      */
     val stream: Boolean? = null,
+    /**
+     * Upper bound on answer length, from the per-model override. Null keeps the key out of the
+     * body entirely so providers that reject unknown fields still work.
+     */
+    @SerialName("max_tokens")
+    val maxTokens: Int? = null,
 ) {
     @Serializable
     data class Message(

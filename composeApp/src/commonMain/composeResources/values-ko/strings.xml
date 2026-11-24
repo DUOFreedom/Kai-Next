@@ -442,7 +442,7 @@
     <string name="kai_build_setup_agents_title">코딩 에이전트</string>
     <string name="kai_build_setup_agents_description">새 시스템에 설치할 CLI를 선택하세요. 나머지는 나중에 추가할 수 있습니다.</string>
     <string name="kai_build_setup_install">Debian 설치</string>
-    <string name="kai_build_step_download">Debian 다운로드 중… %1$d%%</string>
+    <string name="kai_build_step_download">Debian 다운로드 중… %1$s</string>
     <string name="kai_build_step_extract">rootfs 추출 중…</string>
     <string name="kai_build_step_configure">Debian 구성 중…</string>
     <string name="kai_build_step_base_packages">기본 패키지 설치 중…</string>

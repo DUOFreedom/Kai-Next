@@ -442,7 +442,7 @@ Als iets aandacht nodig heeft (verouderde herinneringen, verlopen taken, gebruik
     <string name="kai_build_setup_agents_title">Coding-agents</string>
     <string name="kai_build_setup_agents_description">Kies de CLI\'s om op het verse systeem te installeren. De rest kun je later toevoegen.</string>
     <string name="kai_build_setup_install">Debian installeren</string>
-    <string name="kai_build_step_download">Debian downloaden… %1$d%%</string>
+    <string name="kai_build_step_download">Debian downloaden… %1$s</string>
     <string name="kai_build_step_extract">Rootfs uitpakken…</string>
     <string name="kai_build_step_configure">Debian configureren…</string>
     <string name="kai_build_step_base_packages">Basisspakketten installeren…</string>

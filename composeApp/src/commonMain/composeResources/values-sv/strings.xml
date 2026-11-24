@@ -442,7 +442,7 @@ Om något behöver uppmärksamhet (föråldrade minnen, förfallna uppgifter, an
     <string name="kai_build_setup_agents_title">Kodagenter</string>
     <string name="kai_build_setup_agents_description">Välj CLI:er att installera på det nya systemet. Du kan lägga till de andra senare.</string>
     <string name="kai_build_setup_install">Installera Debian</string>
-    <string name="kai_build_step_download">Laddar ner Debian… %1$d%%</string>
+    <string name="kai_build_step_download">Laddar ner Debian… %1$s</string>
     <string name="kai_build_step_extract">Packar upp rootfs…</string>
     <string name="kai_build_step_configure">Konfigurerar Debian…</string>
     <string name="kai_build_step_base_packages">Installerar baspaket…</string>

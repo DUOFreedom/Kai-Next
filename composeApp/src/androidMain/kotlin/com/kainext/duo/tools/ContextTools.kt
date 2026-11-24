@@ -11,9 +11,9 @@ import com.kainext.duo.network.tools.ParameterSchema
 import com.kainext.duo.network.tools.Tool
 import com.kainext.duo.network.tools.ToolInfo
 import com.kainext.duo.network.tools.ToolSchema
-import kotlin.time.Duration.Companion.seconds
 import org.koin.java.KoinJavaComponent
 import org.koin.java.KoinJavaComponent.inject
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Personal-context tools: clipboard, photo library and recent app usage — the parts of "what is
@@ -70,14 +70,19 @@ class AndroidContextTool : Tool {
 
         return when (action) {
             "clipboard_read" -> readClipboard()
+
             "clipboard_write" -> {
                 val text = args["text"]?.toString()
                 if (text.isNullOrEmpty()) return mapOf("success" to false, "error" to "Missing text")
                 writeClipboard(text)
             }
+
             "photos_recent" -> photosRecent(limit, days, query)
+
             "apps_recent" -> appsRecent(limit, days, query)
+
             "device_state" -> deviceState()
+
             else -> mapOf("success" to false, "error" to "Unknown action: $action")
         }
     }
@@ -252,7 +257,7 @@ class AndroidContextTool : Tool {
                 "count" to 0,
                 "window_days" to days,
                 "note" to
-                "no usage was recorded. Either the phone was idle in this window, or Kai lacks Usage " +
+                    "no usage was recorded. Either the phone was idle in this window, or Kai lacks Usage " +
                     "access (Settings › Special app access › Usage access). The two look identical here, " +
                     "so confirm the permission before concluding nothing was used.",
             )

@@ -156,6 +156,15 @@ private inline fun <T> openAICompatibleResult(block: () -> Result<T>): Result<T>
 
 class Requests {
 
+    private companion object {
+        /**
+         * How often a streaming answer is handed to the UI, in milliseconds. Chunks arrive per token,
+         * so this is the difference between "one transcript rebuild per token" and "one per frame
+         * budget" — the visible typing effect is identical at 12 updates a second.
+         */
+        const val STREAM_EMIT_INTERVAL_MS = 80L
+    }
+
     private val defaultClient = httpClient {
         install(ContentNegotiation) {
             json(
@@ -222,6 +231,7 @@ class Requests {
         tools: List<Tool> = emptyList(),
         systemInstruction: String? = null,
         requestTimeoutMs: Long? = null,
+        maxOutputTokens: Int? = null,
     ): Result<GeminiChatResponseDto> = try {
         val apiKey = credentials.apiKey.ifEmpty { throw GeminiInvalidApiKeyException() }
         val selectedModelId = credentials.modelId
@@ -242,6 +252,9 @@ class Requests {
                         contents = messages,
                         tools = tools.toRequestTools { it.toGeminiTool() },
                         systemInstruction = systemContent,
+                        generationConfig = maxOutputTokens?.let {
+                            GeminiChatRequestDto.GenerationConfig(maxOutputTokens = it)
+                        },
                     ),
                 )
             }
@@ -282,6 +295,7 @@ class Requests {
         sessionId: String? = null,
         reasoningEffort: String? = null,
         requestTimeoutMs: Long? = null,
+        maxOutputTokens: Int? = null,
     ): Result<OpenAICompatibleChatResponseDto> = try {
         val apiKey = getApiKeyOrThrow(service, credentials)
         val model = credentials.modelId.ifEmpty { null }
@@ -299,6 +313,7 @@ class Requests {
                         model = model,
                         tools = tools.toRequestTools { it.toRequestTool() },
                         reasoningEffort = reasoningEffort,
+                        maxTokens = maxOutputTokens,
                     ),
                 )
             }
@@ -336,6 +351,7 @@ class Requests {
         sessionId: String? = null,
         reasoningEffort: String? = null,
         requestTimeoutMs: Long? = null,
+        maxOutputTokens: Int? = null,
         onDelta: suspend (text: String, reasoning: String?) -> Unit,
     ): StreamChatOutcome = try {
         val apiKey = getApiKeyOrThrow(service, credentials)
@@ -353,6 +369,7 @@ class Requests {
                     tools = null,
                     reasoningEffort = reasoningEffort,
                     stream = true,
+                    maxTokens = maxOutputTokens,
                 ),
             )
         }.execute { response ->
@@ -371,6 +388,12 @@ class Requests {
             val text = StringBuilder()
             val reasoning = StringBuilder()
             var sawSse = false
+            // Providers send one chunk per token. Handing every one of them to the caller makes the
+            // UI rebuild the transcript entry, the stats strip and the markdown document hundreds of
+            // times per answer, which is quadratic in the answer length. Emitting on a fixed cadence
+            // keeps the visible typing effect — 12 updates a second is already faster than reading
+            // speed — while cutting that work by roughly an order of magnitude.
+            var lastEmitAtMs = 0L
             // Most providers only report usage in the final chunk, so it has to be carried out of
             // the loop; without it a streamed turn would lose its token/context readout.
             var usageJson: kotlinx.serialization.json.JsonElement? = null
@@ -391,13 +414,18 @@ class Requests {
 
                 delta["content"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotEmpty() }?.let {
                     text.append(it)
-                    onDelta(text.toString(), reasoning.toString().takeIf { r -> r.isNotEmpty() })
                 }
                 val reasoningPiece = delta["reasoning_content"]?.jsonPrimitive?.contentOrNull
                     ?: delta["reasoning"]?.jsonPrimitive?.contentOrNull
                 if (!reasoningPiece.isNullOrEmpty()) {
                     reasoning.append(reasoningPiece)
-                    onDelta(text.toString(), reasoning.toString())
+                }
+                // Coalesce: the caller gets the accumulated answer at most once per interval, so a
+                // long answer costs a fixed number of rebuilds instead of one per token.
+                val nowMs = Clock.System.now().toEpochMilliseconds()
+                if (nowMs - lastEmitAtMs >= STREAM_EMIT_INTERVAL_MS) {
+                    lastEmitAtMs = nowMs
+                    onDelta(text.toString(), reasoning.toString().takeIf { r -> r.isNotEmpty() })
                 }
             }
 
@@ -433,6 +461,7 @@ class Requests {
         tools: List<Tool> = emptyList(),
         reasoningEffort: String? = null,
         requestTimeoutMs: Long? = null,
+        maxOutputTokens: Int? = null,
     ): Result<OpenAIResponsesResponseDto> = try {
         val apiKey = getApiKeyOrThrow(service, credentials)
         val responsesUrl = service.responsesUrl
@@ -449,6 +478,7 @@ class Requests {
                         model = credentials.modelId.ifEmpty { null },
                         tools = tools.toRequestTools { it.toResponsesTool() },
                         reasoning = reasoningEffort?.let { OpenAIResponsesRequestDto.Reasoning(effort = it) },
+                        max_output_tokens = maxOutputTokens,
                     ),
                 )
             }
@@ -582,6 +612,7 @@ class Requests {
         tools: List<Tool> = emptyList(),
         systemInstruction: String? = null,
         requestTimeoutMs: Long? = null,
+        maxOutputTokens: Int? = null,
     ): Result<AnthropicChatResponseDto> = try {
         val apiKey = credentials.apiKey.ifEmpty { throw AnthropicInvalidApiKeyException() }
         val response: HttpResponse =
@@ -594,7 +625,8 @@ class Requests {
                     AnthropicChatRequestDto(
                         model = credentials.modelId,
                         messages = messages,
-                        max_tokens = 8192,
+                        // Defaults to the previous 8192 when the user has not set a cap.
+                        max_tokens = maxOutputTokens ?: 8192,
                         system = systemInstruction,
                         tools = tools.toRequestTools { it.toAnthropicTool() },
                     ),

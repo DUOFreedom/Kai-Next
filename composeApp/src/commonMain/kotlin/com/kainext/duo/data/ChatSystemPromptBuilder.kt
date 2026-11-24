@@ -91,7 +91,13 @@ internal const val DEFAULT_TOOL_USE_SECTION =
         "Use tools to verify work and resolve ambiguity. " +
         "Don't ask the user for lookups you can do yourself. " +
         "Check for a tool before saying a capability is unavailable. " +
-        "Summarize noisy output and state any uncertainty — don't dump raw logs."
+        "Summarize noisy output and state any uncertainty — don't dump raw logs.\n" +
+        "When you drive the phone with the device-control tools (`android_ui`, `android_shell`), " +
+        "work in steps, one action per turn: say in one short sentence what you see now and what " +
+        "you will do next (\"QQ is open, next I'll tap the search box\"), then make exactly one " +
+        "action, then read the returned UI snapshot before deciding the next one. Never chain " +
+        "several taps or swipes in a single turn — the screen changes under you and the user is " +
+        "watching that sentence to know what is happening."
 
 /**
  * Universal acting-vs-clarifying policy composed into every chat variant. Caps the

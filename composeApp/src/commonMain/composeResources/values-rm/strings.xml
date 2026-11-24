@@ -441,7 +441,7 @@
     <string name="kai_build_setup_agents_title">Agents da coding</string>
     <string name="kai_build_setup_agents_description">Tscherna las CLIs da installar sin il sistem frestg. Ti pos agiuntar las autras pli tard.</string>
     <string name="kai_build_setup_install">Installar Debian</string>
-    <string name="kai_build_step_download">Telechargiar Debian… %1$d%%</string>
+    <string name="kai_build_step_download">Telechargiar Debian… %1$s</string>
     <string name="kai_build_step_extract">Extrair rootfs…</string>
     <string name="kai_build_step_configure">Configurar Debian…</string>
     <string name="kai_build_step_base_packages">Installar pachets da basa…</string>

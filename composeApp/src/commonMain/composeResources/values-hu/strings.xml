@@ -441,7 +441,7 @@
     <string name="kai_build_setup_agents_title">Kódoló ügynökök</string>
     <string name="kai_build_setup_agents_description">Válaszd ki a friss rendszerre telepítendő CLI-ket. A többit később is hozzáadhatod.</string>
     <string name="kai_build_setup_install">Debian telepítése</string>
-    <string name="kai_build_step_download">Debian letöltése… %1$d%%</string>
+    <string name="kai_build_step_download">Debian letöltése… %1$s</string>
     <string name="kai_build_step_extract">Rootfs kibontása…</string>
     <string name="kai_build_step_configure">Debian konfigurálása…</string>
     <string name="kai_build_step_base_packages">Alapcsomagok telepítése…</string>

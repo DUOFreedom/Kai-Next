@@ -1,21 +1,22 @@
 package com.kainext.duo.ui.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.background
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.Button
 import androidx.compose.material3.IconButton
@@ -28,12 +29,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Modifier
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kainext.duo.skills.CreativeModeManager
@@ -43,23 +43,23 @@ import com.kainext.duo.ui.components.VerticalScrollbarForScroll
 import com.kainext.duo.ui.handCursor
 import com.kainext.duo.ui.kaiAdaptiveCardBorder
 import com.kainext.duo.ui.kaiAdaptiveCardColors
-import kotlinx.coroutines.launch
-import org.jetbrains.compose.resources.stringResource
 import kai.composeapp.generated.resources.Res
 import kai.composeapp.generated.resources.settings_creative_mode
+import kai.composeapp.generated.resources.settings_creative_mode_body_hint
 import kai.composeapp.generated.resources.settings_creative_mode_cancel
 import kai.composeapp.generated.resources.settings_creative_mode_collecting
 import kai.composeapp.generated.resources.settings_creative_mode_continue
-import kai.composeapp.generated.resources.settings_creative_mode_draft_name
-import kai.composeapp.generated.resources.settings_creative_mode_draft_desc
 import kai.composeapp.generated.resources.settings_creative_mode_draft_body
+import kai.composeapp.generated.resources.settings_creative_mode_draft_desc
+import kai.composeapp.generated.resources.settings_creative_mode_draft_name
 import kai.composeapp.generated.resources.settings_creative_mode_idle_prompt
 import kai.composeapp.generated.resources.settings_creative_mode_preview
 import kai.composeapp.generated.resources.settings_creative_mode_ready
-import kai.composeapp.generated.resources.settings_creative_mode_saved
 import kai.composeapp.generated.resources.settings_creative_mode_save
+import kai.composeapp.generated.resources.settings_creative_mode_saved
 import kai.composeapp.generated.resources.settings_creative_mode_start
-import kai.composeapp.generated.resources.settings_creative_mode_body_hint
+import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * 对话式“创造模式”底部弹窗：用户与子智能共同定义新 skill，
@@ -97,7 +97,7 @@ internal fun CreativeModeScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
-                .verticalScroll(scrollState)
+                .verticalScroll(scrollState),
         ) {
             Text(
                 text = stringResource(Res.string.settings_creative_mode),
@@ -115,7 +115,12 @@ internal fun CreativeModeScreen(
                     )
                     Spacer(Modifier.height(12.dp))
                     Button(
-                        onClick = { manager.start(); name = ""; description = ""; body = "" },
+                        onClick = {
+                            manager.start()
+                            name = ""
+                            description = ""
+                            body = ""
+                        },
                         enabled = true,
                         modifier = Modifier.fillMaxWidth().handCursor(),
                     ) {
@@ -239,7 +244,10 @@ internal fun CreativeModeScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End,
                     ) {
-                        TextButton(onClick = { manager.cancel(); onDismiss() }, modifier = Modifier.handCursor()) {
+                        TextButton(onClick = {
+                            manager.cancel()
+                            onDismiss()
+                        }, modifier = Modifier.handCursor()) {
                             Text(stringResource(Res.string.settings_creative_mode_cancel))
                         }
                         IconButton(onClick = { manager.setDraft(skillId, description, body) }, modifier = Modifier.handCursor()) {
@@ -289,14 +297,16 @@ internal fun CreativeModeScreen(
                     }
                     Spacer(Modifier.height(12.dp))
                     Button(
-                        onClick = { manager.cancel(); onDismiss() },
+                        onClick = {
+                            manager.cancel()
+                            onDismiss()
+                        },
                         modifier = Modifier.fillMaxWidth().handCursor(),
                     ) {
                         Text(stringResource(Res.string.settings_creative_mode_continue))
                     }
                 }
             }
-
         }
         VerticalScrollbarForScroll(
             scrollState = scrollState,

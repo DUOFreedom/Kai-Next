@@ -441,7 +441,7 @@
     <string name="kai_build_setup_agents_title">Agjentë kodimi</string>
     <string name="kai_build_setup_agents_description">Zgjidhni CLI-të për t\'u instaluar në sistemin e freskët. Të tjerat mund t\'i shtoni më vonë.</string>
     <string name="kai_build_setup_install">Instalo Debian</string>
-    <string name="kai_build_step_download">Duke shkarkuar Debian… %1$d%%</string>
+    <string name="kai_build_step_download">Duke shkarkuar Debian… %1$s</string>
     <string name="kai_build_step_extract">Duke nxjerrë rootfs…</string>
     <string name="kai_build_step_configure">Duke konfiguruar Debian…</string>
     <string name="kai_build_step_base_packages">Duke instaluar paketat bazë…</string>

@@ -441,7 +441,7 @@
     <string name="kai_build_setup_agents_title">कोडिंग एजंट</string>
     <string name="kai_build_setup_agents_description">नवीन सिस्टमवर इन्स्टॉल करण्यासाठी CLI निवडा. बाकी नंतर जोडू शकता.</string>
     <string name="kai_build_setup_install">Debian इन्स्टॉल करा</string>
-    <string name="kai_build_step_download">Debian डाउनलोड होत आहे… %1$d%%</string>
+    <string name="kai_build_step_download">Debian डाउनलोड होत आहे… %1$s</string>
     <string name="kai_build_step_extract">rootfs काढत आहे…</string>
     <string name="kai_build_step_configure">Debian कॉन्फिगर होत आहे…</string>
     <string name="kai_build_step_base_packages">बेस पॅकेजेस इन्स्टॉल होत आहेत…</string>

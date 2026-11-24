@@ -442,7 +442,7 @@
     <string name="kai_build_setup_agents_title">Πράκτορες κώδικα</string>
     <string name="kai_build_setup_agents_description">Επιλέξτε τα CLI για εγκατάσταση στο φρέσκο σύστημα. Τα υπόλοιπα μπορείτε να τα προσθέσετε αργότερα.</string>
     <string name="kai_build_setup_install">Εγκατάσταση Debian</string>
-    <string name="kai_build_step_download">Λήψη Debian… %1$d%%</string>
+    <string name="kai_build_step_download">Λήψη Debian… %1$s</string>
     <string name="kai_build_step_extract">Εξαγωγή rootfs…</string>
     <string name="kai_build_step_configure">Διαμόρφωση Debian…</string>
     <string name="kai_build_step_base_packages">Εγκατάσταση βασικών πακέτων…</string>

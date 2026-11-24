@@ -443,7 +443,7 @@
     <string name="kai_build_setup_agents_title">وكلاء البرمجة</string>
     <string name="kai_build_setup_agents_description">اختر واجهات سطر الأوامر لتثبيتها على النظام الجديد. يمكنك إضافة الباقي لاحقًا.</string>
     <string name="kai_build_setup_install">تثبيت Debian</string>
-    <string name="kai_build_step_download">جارٍ تنزيل Debian… %1$d%%</string>
+    <string name="kai_build_step_download">جارٍ تنزيل Debian… %1$s</string>
     <string name="kai_build_step_extract">جارٍ استخراج rootfs…</string>
     <string name="kai_build_step_configure">جارٍ تهيئة Debian…</string>
     <string name="kai_build_step_base_packages">جارٍ تثبيت الحزم الأساسية…</string>

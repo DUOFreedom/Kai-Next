@@ -171,7 +171,7 @@ class SelfCorrectingExecutor(
             finalOutcome = finalOutcome,
             giveUpReason = when {
                 succeeded -> null
-                completed == null -> "Ran out of the overall time budget (${totalTimeoutMs} ms)."
+                completed == null -> "Ran out of the overall time budget ($totalTimeoutMs ms)."
                 else -> stopReason
             },
             timedOut = completed == null,
@@ -220,10 +220,9 @@ class SelfCorrectingExecutor(
      * Context handed to the next attempt: the previous failure digest plus the model's own
      * reasoning, so a re-planning `attempt` knows which fixes were already ruled out.
      */
-    private fun buildPreviousFailure(previous: AttemptRecord, reasoning: String?): String =
-        if (reasoning == null) {
-            previous.explanation
-        } else {
-            previous.explanation + "\nprevious correction reasoning: " + reasoning
-        }
+    private fun buildPreviousFailure(previous: AttemptRecord, reasoning: String?): String = if (reasoning == null) {
+        previous.explanation
+    } else {
+        previous.explanation + "\nprevious correction reasoning: " + reasoning
+    }
 }

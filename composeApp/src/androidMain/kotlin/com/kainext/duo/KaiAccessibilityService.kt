@@ -2,16 +2,30 @@ package com.kainext.duo
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.graphics.Bitmap
 import android.graphics.Path
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
+import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 private const val TAG = "KaiA11y"
+
+/**
+ * How long to wait between screen captures. The platform rate-limits accessibility screenshots at
+ * roughly three per second and answers a faster call with an error rather than an image, so a
+ * burst of agent actions (screenshot, tap, screenshot) would lose the second frame.
+ */
+private const val MIN_SCREENSHOT_INTERVAL_MS = 400L
 
 /**
  * The accessibility service behind the "accessibility" privilege mode.
@@ -81,6 +95,56 @@ class KaiAccessibilityService : AccessibilityService() {
     }
 
     /**
+     * Root of the window that belongs to the app the user is actually looking at.
+     *
+     * [activeRoot] is not that window whenever Kai itself draws something on top: the chat
+     * overlay is a TYPE_APPLICATION_OVERLAY window, it takes input focus, and
+     * `rootInActiveWindow` then reports Kai's own package. Every caller that asks "did the app
+     * come to the front?" or "what is on screen?" would answer "Kai" and then hand the user a
+     * screen that was never looked at — and UI snapshots would capture the agent's own
+     * narration instead of the target app.
+     *
+     * This walks the accessibility window stack instead of trusting the focused window: it
+     * keeps only real application windows (which excludes Kai's overlay, system dialogs and the
+     * IME), prefers the focused then the active one, and prefers a window that is not ours.
+     * When nothing else qualifies — the user genuinely is inside Kai — it falls back to
+     * [activeRoot] so the answer stays "Kai" rather than null.
+     */
+    fun foregroundAppRoot(): AccessibilityNodeInfo? {
+        val appWindows = try {
+            windows.orEmpty().filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+        } catch (e: Throwable) {
+            Log.w(TAG, "windows failed", e)
+            emptyList()
+        }
+        val ordered = appWindows.sortedByDescending { window ->
+            when {
+                window.isFocused -> 2
+                window.isActive -> 1
+                else -> 0
+            }
+        }
+        val own = packageName
+        val foreign = ordered.firstOrNull { window ->
+            try {
+                window.root?.packageName?.toString() != own
+            } catch (e: Throwable) {
+                Log.w(TAG, "window.root failed", e)
+                false
+            }
+        }
+        return foreign?.root ?: activeRoot()
+    }
+
+    /** Package that owns [foregroundAppRoot], for callers that only need the name. */
+    fun foregroundAppPackage(): String? = try {
+        foregroundAppRoot()?.packageName?.toString()
+    } catch (e: Throwable) {
+        Log.w(TAG, "foregroundAppPackage failed", e)
+        null
+    }
+
+    /**
      * Taps the centre of [node] via ACTION_CLICK. Returns false when the node is not
      * clickable, so the caller can fall back to a coordinate gesture on its bounds.
      */
@@ -127,12 +191,11 @@ class KaiAccessibilityService : AccessibilityService() {
     }
 
     /** Swipes from (x1,y1) to (x2,y2) over [durationMs]. */
-    fun gestureSwipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Long = 300): Boolean =
-        dispatchPath { path ->
-            path.moveTo(x1, y1)
-            path.lineTo(x2, y2)
-            GestureDescription.StrokeDescription(path, 0, durationMs.coerceAtLeast(1))
-        }
+    fun gestureSwipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Long = 300): Boolean = dispatchPath { path ->
+        path.moveTo(x1, y1)
+        path.lineTo(x2, y2)
+        GestureDescription.StrokeDescription(path, 0, durationMs.coerceAtLeast(1))
+    }
 
     private fun dispatchPath(build: (Path) -> GestureDescription.StrokeDescription): Boolean = try {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
@@ -146,6 +209,71 @@ class KaiAccessibilityService : AccessibilityService() {
     } catch (e: Throwable) {
         Log.w(TAG, "dispatchGesture failed", e)
         false
+    }
+
+    // ---- screen capture ----
+
+    /** When the last capture was requested, so the platform's rate limit is respected here. */
+    private var lastCaptureAtMs = 0L
+
+    /**
+     * Captures the screen through the accessibility screenshot API (Android 11 and up).
+     *
+     * Root and Shizuku can run `screencap`, but the accessibility mode is the one that needs no
+     * elevated privilege at all — and a screenshot was the one action it could not serve, so a
+     * user who granted only accessibility got an error every time the agent asked to look at the
+     * screen. This closes that gap: the platform returns the composited pixels at native
+     * resolution, which is exactly what the agent is allowed to reason about.
+     *
+     * Returns null when the platform refuses — below Android 11, when screen capture is disabled
+     * for accessibility, or when a second request arrives inside the minimum interval. The caller
+     * must read null as "no image" and fall back, never as "the screen was blank".
+     */
+    suspend fun captureScreenshotBitmap(): Bitmap? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        // The platform answers a too-early request with an error code instead of an image, so a
+        // tight agent loop (screenshot, tap, screenshot) would silently lose frames. Waiting the
+        // remainder out is cheaper than the failure the caller would have to retry.
+        val sinceLast = SystemClock.elapsedRealtime() - lastCaptureAtMs
+        if (sinceLast < MIN_SCREENSHOT_INTERVAL_MS) {
+            delay(MIN_SCREENSHOT_INTERVAL_MS - sinceLast)
+        }
+        lastCaptureAtMs = SystemClock.elapsedRealtime()
+
+        val shot: ScreenshotResult = try {
+            suspendCancellableCoroutine<ScreenshotResult?> { continuation ->
+                takeScreenshot(
+                    Display.DEFAULT_DISPLAY,
+                    mainExecutor,
+                    object : TakeScreenshotCallback {
+                        override fun onSuccess(screenshot: ScreenshotResult) {
+                            if (continuation.isActive) continuation.resume(screenshot)
+                        }
+
+                        override fun onFailure(errorCode: Int) {
+                            Log.w(TAG, "takeScreenshot failed with error $errorCode")
+                            if (continuation.isActive) continuation.resume(null)
+                        }
+                    },
+                )
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "takeScreenshot threw", e)
+            null
+        } ?: return null
+
+        return try {
+            // wrapHardwareBuffer hands back a Bitmap that still points at the GPU buffer, so it
+            // has to be copied before the buffer is closed — otherwise every capture would keep a
+            // full-screen allocation alive until the service died.
+            Bitmap.wrapHardwareBuffer(shot.hardwareBuffer, shot.colorSpace)
+                ?.copy(Bitmap.Config.ARGB_8888, false)
+        } catch (e: Throwable) {
+            Log.w(TAG, "screenshot buffer to bitmap failed", e)
+            null
+        } finally {
+            shot.hardwareBuffer.close()
+        }
     }
 
     /** Presses a global navigation key: back, home or recents. */

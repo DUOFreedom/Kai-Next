@@ -4,6 +4,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
@@ -32,16 +34,30 @@ class SwarmOrchestrator(
     private val totalTimeoutMs: Long = 300_000,
 ) {
 
-    suspend fun run(request: SwarmRequest): SwarmResult {
-        val plan = planner.plan(request.copy(maxSteps = maxSteps))
-        val steps = plan.steps.take(maxSteps)
+    /**
+     * [onPlan] and [onStep] exist so a caller can show the plan the moment it exists and update
+     * each step as it lands. Both are called from whatever coroutine runs the step, so a callback
+     * that touches shared UI state must do it thread-safely; they must not block.
+     */
+    suspend fun run(
+        request: SwarmRequest,
+        onPlan: ((PlanResult) -> Unit)? = null,
+        onStep: ((StepResult) -> Unit)? = null,
+    ): SwarmResult {
+        val planned = planner.plan(request.copy(maxSteps = maxSteps))
+        val steps = planned.steps.take(maxSteps)
         if (steps.isEmpty()) {
-            return SwarmResult(plan = plan, success = false, stopReason = "planner produced no steps")
+            return SwarmResult(plan = planned, success = false, stopReason = "planner produced no steps")
         }
+        // The result reports the plan the run actually used, not the planner's untrimmed reply: a
+        // caller showing `plan.steps` would otherwise display steps that were never scheduled.
+        val plan = if (steps.size == planned.steps.size) planned else planned.copy(steps = steps)
+        onPlan?.invoke(plan)
 
         val results = mutableListOf<StepResult>()
         val completed = mutableSetOf<String>()
         val failed = mutableSetOf<String>()
+        val semaphore = Semaphore(maxParallel.coerceAtLeast(1))
 
         val finished = withTimeoutOrNull(totalTimeoutMs) {
             val byId: Map<String, PlanStep> = steps.associateBy { it.id }
@@ -84,7 +100,11 @@ class SwarmOrchestrator(
                                     error = "dependency $blockedBy failed",
                                 )
                             } else {
-                            executeStep(step)
+                                // The cap is enforced with a permit queue rather than by slicing
+                                // [runnable] into fixed chunks: a chunk of three where one step is
+                                // slow would leave the other two slots idle, while a permit hands
+                                // a freed slot straight to the next step.
+                                semaphore.withPermit { executeStep(step) }
                             }
                         }
                     }.awaitAll()
@@ -92,6 +112,7 @@ class SwarmOrchestrator(
 
                 for (result in batch) {
                     results += result
+                    onStep?.invoke(result)
                     pending.remove(result.stepId)
                     when (result.status) {
                         StepStatus.DONE -> completed += result.stepId

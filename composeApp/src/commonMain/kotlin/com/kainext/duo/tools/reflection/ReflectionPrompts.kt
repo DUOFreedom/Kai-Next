@@ -135,8 +135,10 @@ object ReflectionPrompts {
         appendLine(
             "- If attempts remaining is 0, you must set should_retry to false.",
         )
-        appendLine("- Exit code meaning for the codes you saw: read the explanations above; they " +
-            "state whether a retry is worth it and what to change.")
+        appendLine(
+            "- Exit code meaning for the codes you saw: read the explanations above; they " +
+                "state whether a retry is worth it and what to change.",
+        )
         appendLine()
 
         appendLine("## Output format")
@@ -150,12 +152,16 @@ object ReflectionPrompts {
         appendLine("}")
         appendLine(FENCE)
         appendLine("Fields:")
-        appendLine("- corrected_command (string or null): the exact next command. Use null when the " +
-            "next step is not a single shell command; the executor will then re-plan from the intent.")
+        appendLine(
+            "- corrected_command (string or null): the exact next command. Use null when the " +
+                "next step is not a single shell command; the executor will then re-plan from the intent.",
+        )
         appendLine("- reasoning (string): what the previous failure means and why this command differs.")
         appendLine("- should_retry (boolean): false to stop now.")
-        appendLine("- give_up_reason (string or null): required when should_retry is false; a short " +
-            "explanation the user can understand.")
+        appendLine(
+            "- give_up_reason (string or null): required when should_retry is false; a short " +
+                "explanation the user can understand.",
+        )
     }.trimEnd()
 
     /**
@@ -206,12 +212,10 @@ object ReflectionPrompts {
     }
 
     /** First present, non-null-ish string among [names], searched in order. */
-    private fun JsonObject.stringField(vararg names: String): String? =
-        names.firstNotNullOfOrNull { name -> get(name)?.asTextOrNull() }
+    private fun JsonObject.stringField(vararg names: String): String? = names.firstNotNullOfOrNull { name -> get(name)?.asTextOrNull() }
 
     /** First present boolean among [names]; accepts real booleans and `"true"` / `"false"`. */
-    private fun JsonObject.boolField(vararg names: String): Boolean? =
-        names.firstNotNullOfOrNull { name -> get(name)?.asBooleanOrNull() }
+    private fun JsonObject.boolField(vararg names: String): Boolean? = names.firstNotNullOfOrNull { name -> get(name)?.asBooleanOrNull() }
 
     /**
      * Text of a JSON value, or `null` when it is absent, `JsonNull`, a nested object/array, or the

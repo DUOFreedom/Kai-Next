@@ -30,9 +30,12 @@ data class OpenAIResponsesRequestDto(
     val store: Boolean = false,
     /** Thinking effort for reasoning models. Sent only when the caller supplies one. */
     val reasoning: Reasoning? = null,
+    /** Upper bound on answer length; null keeps the key out of the body. */
+    val max_output_tokens: Int? = null,
 ) {
     @Serializable
     data class Reasoning(val effort: String? = null)
+
     /**
      * Same JSON Schema as the chat-completions tool, minus the `function` wrapper — the Responses
      * API tags function tools inline. The parameter schema is byte-identical, so the shared

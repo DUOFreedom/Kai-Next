@@ -442,7 +442,7 @@ Jeśli coś wymaga uwagi (przestarzałe wspomnienia, zaległe zadania, dalsze dz
     <string name="kai_build_setup_agents_title">Agenty kodowania</string>
     <string name="kai_build_setup_agents_description">Wybierz CLI do zainstalowania na świeżym systemie. Pozostałe możesz dodać później.</string>
     <string name="kai_build_setup_install">Zainstaluj Debian</string>
-    <string name="kai_build_step_download">Pobieranie Debiana… %1$d%%</string>
+    <string name="kai_build_step_download">Pobieranie Debiana… %1$s</string>
     <string name="kai_build_step_extract">Rozpakowywanie rootfs…</string>
     <string name="kai_build_step_configure">Konfigurowanie Debiana…</string>
     <string name="kai_build_step_base_packages">Instalowanie pakietów bazowych…</string>

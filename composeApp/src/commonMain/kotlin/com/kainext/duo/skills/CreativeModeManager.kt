@@ -24,10 +24,13 @@ class CreativeModeManager(
     enum class Stage {
         /** 未开始：尚未与子智能交互。 */
         Idle,
+
         /** 收集中：子智能正在询问名称/描述/用途。 */
         Collecting,
+
         /** 草稿已就绪：可预览并保存。 */
         ReadyToSave,
+
         /** 已保存：skill 已写入沙箱并重新加载。 */
         Saved,
     }

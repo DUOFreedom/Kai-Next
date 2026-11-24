@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -46,10 +49,13 @@ internal fun ChatStatsBar(
     modifier: Modifier = Modifier,
     /** When non-null, a button opens the floating control window. Null hides it entirely. */
     onShowOverlay: (() -> Unit)? = null,
+    /** Whether team mode is armed for the next turn; the chip is only drawn when a toggle exists. */
+    isTeamMode: Boolean = false,
+    onToggleTeamMode: (() -> Unit)? = null,
 ) {
     // Keep the strip alive while the conversation is empty when a context window is known:
     // "0% of 128k" is still useful, and the row would otherwise pop in and out of existence.
-    if (totalTokens <= 0 && rounds <= 0 && onShowOverlay == null &&
+    if (totalTokens <= 0 && rounds <= 0 && onShowOverlay == null && onToggleTeamMode == null &&
         (contextWindow == null || contextWindow <= 0)
     ) {
         return
@@ -75,17 +81,19 @@ internal fun ChatStatsBar(
 
     val cacheText = when {
         tokenUsage == null -> null
+
         tokenUsage.cacheHitFraction == null -> stringResource(Res.string.chat_stats_no_cache)
+
         else -> stringResource(
             Res.string.chat_stats_cache_hit,
-            ((tokenUsage.cacheHitFraction ?: 0f) * 100).toInt().toString(),
+            "${((tokenUsage.cacheHitFraction ?: 0f) * 100).toInt()}%",
         )
     }
 
     val contextText = if (contextWindow != null && contextWindow > 0) {
         val used = tokenUsage?.totalTokens ?: 0
         val percent = (used * 100.0 / contextWindow).coerceIn(0.0, 100.0)
-        val shown = if (percent > 0 && percent < 1) "<1" else percent.toInt().toString()
+        val shown = if (percent > 0 && percent < 1) "<1%" else "${percent.toInt()}%"
         stringResource(Res.string.chat_stats_context, shown, formatContextWindow(contextWindow))
     } else {
         null
@@ -123,6 +131,33 @@ internal fun ChatStatsBar(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
             )
+        }
+        // Team/Solo switch using Material 3 SegmentedButton (same pattern as App.kt nav bar).
+        // When onToggleTeamMode is null, the switch is hidden.
+        onToggleTeamMode?.let { onToggle ->
+            Spacer(Modifier.width(8.dp))
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier
+                    .height(28.dp)
+                    .align(Alignment.CenterVertically),
+            ) {
+                SegmentedButton(
+                    selected = isTeamMode,
+                    onClick = { onToggle() },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                    modifier = Modifier.handCursor(),
+                ) {
+                    Text("Team", style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                }
+                SegmentedButton(
+                    selected = !isTeamMode,
+                    onClick = { onToggle() },
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                    modifier = Modifier.handCursor(),
+                ) {
+                    Text("Solo", style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                }
+            }
         }
         // Sits at the end of the strip so it never pushes the numbers around as it appears.
         onShowOverlay?.let { onClick ->

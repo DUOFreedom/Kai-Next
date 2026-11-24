@@ -65,23 +65,25 @@ class InMemoryBlackboard(
         }
     }
 
-    override fun latest(stepId: String): BlackboardEntry? =
-        _entries.value.lastOrNull { it.stepId == stepId }
+    override fun latest(stepId: String): BlackboardEntry? = _entries.value.lastOrNull { it.stepId == stepId }
 
     override fun snapshot(): String {
         val all = _entries.value
         if (all.isEmpty()) return ""
-        return buildString {
+        val body = buildString {
             for (entry in all) {
                 val marker = if (entry.success) "" else " [FAILED]"
                 append("- ${entry.stepId} (${entry.workerKind.name.lowercase()})$marker: ")
                 appendLine(entry.content.take(MAX_ENTRY_CHARS).replace('\n', ' ').trim())
-                if (length > MAX_SNAPSHOT_CHARS) {
-                    appendLine("… (earlier entries omitted)")
-                    break
-                }
+                if (length > MAX_SNAPSHOT_CHARS) break
             }
-        }.take(MAX_SNAPSHOT_CHARS).trim()
+        }
+        if (body.length <= MAX_SNAPSHOT_CHARS) return body.trim()
+        // The marker is appended after clipping, not before: `take` would otherwise cut off the very
+        // line that says the digest is incomplete, leaving a truncated snapshot that reads as whole.
+        val marker = "… (earlier entries omitted)"
+        val room = (MAX_SNAPSHOT_CHARS - marker.length - 1).coerceAtLeast(0)
+        return body.take(room).trimEnd() + "\n" + marker
     }
 
     companion object {

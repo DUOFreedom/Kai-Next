@@ -2,20 +2,38 @@ package com.kainext.duo.ui.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kainext.duo.agents.InMemoryBlackboard
+import com.kainext.duo.agents.LlmPlanner
+import com.kainext.duo.agents.StepStatus
+import com.kainext.duo.agents.SwarmOrchestrator
+import com.kainext.duo.agents.SwarmRequest
+import com.kainext.duo.agents.ToolBackedWorker
+import com.kainext.duo.agents.Worker
+import com.kainext.duo.agents.WorkerKind
+import com.kainext.duo.data.AgentGoalStatus
 import com.kainext.duo.data.Conversation
 import com.kainext.duo.data.DataRepository
 import com.kainext.duo.data.FreeMode
+import com.kainext.duo.data.GoalStore
+import com.kainext.duo.data.ModelCatalog
 import com.kainext.duo.data.Service
 import com.kainext.duo.data.ServiceEntry
 import com.kainext.duo.data.TaskScheduler
 import com.kainext.duo.data.ThinkingEffort
+import com.kainext.duo.data.TodoStatus
+import com.kainext.duo.data.TodoStore
+import com.kainext.duo.data.ToolApprovalController
 import com.kainext.duo.data.UiSubmission
 import com.kainext.duo.data.supportsReasoningEffort
+import com.kainext.duo.getAvailableTools
 import com.kainext.duo.getBackgroundDispatcher
 import com.kainext.duo.network.UiError
 import com.kainext.duo.network.shouldShowFreeProviderSuggestions
 import com.kainext.duo.network.toUiError
+import com.kainext.duo.network.tools.Tool
 import com.kainext.duo.overlay.OverlayController
+import com.kainext.duo.overlay.OverlayPlanStep
+import com.kainext.duo.overlay.OverlayStepStatus
 import com.kainext.duo.tools.AppPermission
 import com.kainext.duo.tools.PermissionController
 import com.kainext.duo.tools.isLocalNetworkUrl
@@ -29,8 +47,6 @@ import kai.composeapp.generated.resources.conversation_untitled
 import kai.composeapp.generated.resources.error_local_network_permission
 import kai.composeapp.generated.resources.error_unsupported_file_type
 import kai.composeapp.generated.resources.litert_no_model_warning
-import kotlin.coroutines.CoroutineContext
-import kotlin.time.Duration.Companion.seconds
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CancellationException
@@ -49,12 +65,17 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.getString
+import kotlin.coroutines.CoroutineContext
+import kotlin.time.Duration.Companion.seconds
 
 class ChatViewModel(
     private val dataRepository: DataRepository,
     private val taskScheduler: TaskScheduler,
     private val backgroundDispatcher: CoroutineContext = getBackgroundDispatcher(),
     private val localNetworkPermissionController: PermissionController = PermissionController(AppPermission.LOCAL_NETWORK),
+    // Nullable so tests and previews can build the view model without a persistence layer.
+    private val todoStore: TodoStore? = null,
+    private val goalStore: GoalStore? = null,
 ) : ViewModel() {
 
     private val actions = ChatActions(
@@ -84,6 +105,11 @@ class ChatViewModel(
         discardSmsDraft = ::discardSmsDraft,
         consumeComposerPrefill = ::consumeComposerPrefill,
         showOverlay = { dataRepository.showOverlay() },
+        toggleTeamMode = ::toggleTeamMode,
+        respondToToolApproval = { approved -> ToolApprovalController.respond(approved) },
+        alwaysAllowPendingTool = { ToolApprovalController.respondAlwaysAllow() },
+        toggleTodo = ::toggleTodo,
+        setGoalStatus = ::setGoalStatus,
     )
     private val freeModeNames: Map<FreeMode, String> = FreeMode.entries.associateWith { "Free ${it.modelId.replaceFirstChar { c -> c.uppercase() }}" }
     private var currentJob: Job? = null
@@ -97,6 +123,32 @@ class ChatViewModel(
 
     init {
         updateAvailableServices()
+
+        // The tool executor suspends inside a tool call while it waits for approval, so the
+        // pending request has to be mirrored into UI state for the dialog to appear at all.
+        viewModelScope.launch {
+            ToolApprovalController.pending.collect { request ->
+                _state.update { it.copy(pendingToolApproval = request) }
+            }
+        }
+        todoStore?.let { store ->
+            viewModelScope.launch {
+                combine(store.todos, dataRepository.currentConversationId) { todos, conversationId ->
+                    todos[conversationId.orEmpty()].orEmpty().toImmutableList()
+                }.distinctUntilChanged().collect { items ->
+                    _state.update { it.copy(todos = items) }
+                }
+            }
+        }
+        goalStore?.let { store ->
+            viewModelScope.launch {
+                combine(store.goals, dataRepository.currentConversationId) { goals, conversationId ->
+                    goals[conversationId.orEmpty()]
+                }.distinctUntilChanged().collect { goal ->
+                    _state.update { it.copy(goal = goal) }
+                }
+            }
+        }
 
         // Bridge the floating window back into the chat loop: a stop tap cancels the running
         // request, and a message typed into the window is submitted as a normal follow-up.
@@ -229,7 +281,19 @@ class ChatViewModel(
         // Conversation-level counters for the stats strip. Rounds are user turns (one question =
         // one round); steps are tool executions, which is what makes a long agentic run feel long.
         // Tokens are summed from per-turn provider usage, so they stay honest even when a turn
-        // reports nothing (those simply contribute zero).
+        // reports nothing (those simply contribute zero). Counted in one pass: this block runs on
+        // every streamed delta, so three separate scans of the transcript would triple that cost.
+        var rounds = 0
+        var steps = 0
+        var totalTokens = 0
+        for (entry in history) {
+            when (entry.role) {
+                History.Role.USER -> rounds++
+                History.Role.TOOL, History.Role.TOOL_EXECUTING -> steps++
+                History.Role.ASSISTANT -> Unit
+            }
+            totalTokens += entry.tokenUsage?.totalTokens ?: 0
+        }
         state.copy(
             history = history.toImmutableList(),
             supportedFileExtensions = dataRepository.supportedFileExtensions().toImmutableList(),
@@ -237,11 +301,11 @@ class ChatViewModel(
             currentConversationId = conversationId,
             hasUnreadHeartbeat = hasUnreadHeartbeat,
             installedSkills = dataRepository.getInstalledSkills().toImmutableList(),
-            rounds = history.count { it.role == History.Role.USER },
+            rounds = rounds,
             // In-flight tool calls count too: otherwise the step counter sits still during a
             // long tool run and then jumps, which reads as "stuck".
-            steps = history.count { it.role == History.Role.TOOL || it.role == History.Role.TOOL_EXECUTING },
-            totalTokens = history.sumOf { it.tokenUsage?.totalTokens ?: 0 },
+            steps = steps,
+            totalTokens = totalTokens,
         )
     }.distinctUntilChanged().stateIn(
         scope = viewModelScope,
@@ -301,15 +365,26 @@ class ChatViewModel(
                 // Mirror progress into the floating window so the user can watch (and interrupt)
                 // while the agent is operating other apps. The controller is a plain object with
                 // a StateFlow, so this works without the window being open.
+                val teamMode = _state.value.isTeamMode
                 OverlayController.startTask(
                     strippedQuestion?.takeIf { it.isNotBlank() }?.take(120) ?: "Working…",
+                    teamMode = teamMode,
                 )
-                dataRepository.ask(strippedQuestion, files, uiSubmission, activeSkillId)
+                if (teamMode) {
+                    OverlayController.setTeamMode(true)
+                    runTeamTurn(strippedQuestion.orEmpty())
+                } else {
+                    dataRepository.ask(strippedQuestion, files, uiSubmission, activeSkillId)
+                }
 
                 // Auto-retry in interactive mode if the response has no valid kai-ui
                 if (_state.value.isInteractiveMode) {
                     retryIfNoValidKaiUi()
                 }
+
+                // A goal the model has not closed out yet means "not finished": keep the turn
+                // going instead of making the user type "continue" after every round.
+                continueGoalIfActive()
 
                 _state.update {
                     it.copy(isLoading = false)
@@ -367,6 +442,54 @@ class ChatViewModel(
 
             dataRepository.ask(retryMessage, emptyList())
         }
+    }
+
+    /**
+     * Keeps a long-running goal moving after the model stops on its own.
+     *
+     * The model is the one that decides a goal is done (update_goal), so a turn that ends
+     * with the goal still ACTIVE means "not finished yet". Nudging it to carry on is what
+     * turns a multi-turn chore into a single request; every nudge spends one round of the
+     * budget, and an exhausted budget marks the goal BLOCKED so the stop is visible instead
+     * of the assistant simply going quiet.
+     */
+    private suspend fun continueGoalIfActive() {
+        val store = goalStore ?: return
+        val conversationId = dataRepository.currentConversationId.value.orEmpty()
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            val goal = store.forConversation(conversationId)
+                ?.takeIf { it.status == AgentGoalStatus.ACTIVE }
+                ?: return
+            if (goal.rounds >= goal.maxRounds) {
+                store.setStatus(conversationId, AgentGoalStatus.BLOCKED, blockedReason = GOAL_BLOCKED_ROUND_LIMIT)
+                return
+            }
+            val updated = store.recordRound(conversationId) ?: return
+            OverlayController.setStatus("Goal ${updated.rounds}/${updated.maxRounds}")
+            dataRepository.ask(
+                "[SYSTEM] Continue working on the active goal: ${goal.objective}. " +
+                    "This is automatic round ${updated.rounds} of ${updated.maxRounds}. " +
+                    "Carry on from where you stopped; do not repeat work already done. " +
+                    "When the goal is fully achieved, call update_goal with status=completed. " +
+                    "If you cannot make progress, call update_goal with status=blocked and say why.",
+                emptyList(),
+            )
+            if (_state.value.isInteractiveMode) retryIfNoValidKaiUi()
+        }
+    }
+
+    private fun setGoalStatus(status: AgentGoalStatus) {
+        val store = goalStore ?: return
+        val conversationId = dataRepository.currentConversationId.value.orEmpty()
+        val current = store.forConversation(conversationId) ?: return
+        // Resuming a goal that already spent its budget would block again on the next step,
+        // so an explicit resume hands out a fresh budget instead of a useless one-round try.
+        if (status == AgentGoalStatus.ACTIVE && current.rounds >= current.maxRounds) {
+            store.start(conversationId, current.objective, current.maxRounds)
+            return
+        }
+        store.setStatus(conversationId, status)
     }
 
     private fun clearHistory() {
@@ -450,9 +573,24 @@ class ChatViewModel(
     private fun cancel() {
         currentJob?.cancel()
         currentJob = null
+        // A pending approval would otherwise keep the tool coroutine suspended forever after
+        // the user aborted the run.
+        ToolApprovalController.cancelPending()
         _state.update {
             it.copy(isLoading = false)
         }
+    }
+
+    /**
+     * Tapping a checklist row toggles it. A completed step is allowed to go back to pending
+     * because the model sometimes finishes a step early and then resumes the same work.
+     */
+    private fun toggleTodo(itemId: String) {
+        val store = todoStore ?: return
+        val conversationId = dataRepository.currentConversationId.value.orEmpty()
+        val current = store.forConversation(conversationId).firstOrNull { it.id == itemId } ?: return
+        val next = if (current.status == TodoStatus.COMPLETED) TodoStatus.PENDING else TodoStatus.COMPLETED
+        store.setStatus(conversationId, itemId, next)
     }
 
     private fun selectService(instanceId: String) {
@@ -531,13 +669,34 @@ class ChatViewModel(
             }
         val entries = withEffort.toImmutableList()
 
+        // The context window belongs to the model that will actually answer. Free-mode entries
+        // carry no model id of their own, so they inherit whatever model they resolve to — the
+        // same fallback the reasoning-effort chips use.
+        val activeModelId = entries.firstOrNull()?.let { entry ->
+            entry.modelId.ifEmpty { configuredEntries.firstOrNull()?.modelId.orEmpty() }
+        }.orEmpty()
+        // A user override wins over the catalog estimate, matching what the request path trims to.
+        val activeContextWindow = activeModelId
+            .takeIf { it.isNotEmpty() }
+            ?.let { id ->
+                val override = dataRepository.getModelContextTokens(id)
+                (if (override > 0) override else ModelCatalog.estimateContextWindow(id)).toLong()
+            }
+
         val primaryService = entries.firstOrNull()?.let { Service.fromId(it.serviceId) }
         val warning = if (primaryService?.isOnDevice == true && dataRepository.getLocalDownloadedModels().isEmpty()) {
             Res.string.litert_no_model_warning
         } else {
             null
         }
-        _state.update { it.copy(availableServices = entries, warning = warning, showPrivacyInfo = dataRepository.isUsingSharedKey()) }
+        _state.update {
+            it.copy(
+                availableServices = entries,
+                warning = warning,
+                showPrivacyInfo = dataRepository.isUsingSharedKey(),
+                contextWindow = activeContextWindow,
+            )
+        }
     }
 
     companion object {
@@ -706,4 +865,86 @@ class ChatViewModel(
         dataRepository.setInteractiveMode(isInteractive)
         _state.update { it.copy(isInteractiveMode = isInteractive) }
     }
+
+    /** Switches the next turn between one model call and a planned swarm run. */
+    fun toggleTeamMode() {
+        _state.update { it.copy(isTeamMode = !it.isTeamMode) }
+    }
+
+    /**
+     * Runs one turn through the swarm (planner + workers) instead of a single model call.
+     *
+     * The plan and every finished step are mirrored into chat state and into the floating window:
+     * a swarm run can take minutes, and progress that only appears at the end is indistinguishable
+     * from a hang. The planner and workers reuse [DataRepository.askSilently] as their model, so
+     * team mode needs no extra credentials or client.
+     */
+    private suspend fun runTeamTurn(instruction: String) {
+        _state.update {
+            it.copy(
+                isTeamRunning = true,
+                teamInstruction = instruction,
+                teamPlan = persistentListOf(),
+                teamResults = persistentListOf(),
+                teamSummary = "",
+            )
+        }
+        val complete: suspend (String) -> String = { prompt -> dataRepository.askSilently(prompt) }
+        val allTools = getAvailableTools()
+        val workers: Map<WorkerKind, Worker> = WorkerKind.entries.associateWith { kind ->
+            ToolBackedWorker(kind = kind, tools = toolsFor(kind, allTools), complete = complete)
+        }
+        val orchestrator = SwarmOrchestrator(
+            planner = LlmPlanner(complete),
+            workers = workers,
+            blackboard = InMemoryBlackboard(),
+        )
+        val result = orchestrator.run(
+            request = SwarmRequest(instruction = instruction),
+            onPlan = { plan ->
+                _state.update { it.copy(teamPlan = plan.steps.toImmutableList()) }
+                OverlayController.setPlan(
+                    plan.steps.map { step -> OverlayPlanStep(id = step.id, text = step.description) },
+                )
+            },
+            onStep = { step ->
+                _state.update { it.copy(teamResults = (it.teamResults + step).toImmutableList()) }
+                OverlayController.setStepStatus(step.stepId, step.status.toOverlayStatus())
+                OverlayController.logTool("${step.workerKind} ${step.stepId} → ${step.status.name}")
+            },
+        )
+        _state.update { it.copy(teamSummary = result.summary(), isTeamRunning = false) }
+    }
+
+    /**
+     * Hands each worker only the tools its role can use. GENERAL keeps the full set so the
+     * degraded single-step plan (used when planning fails) still has every capability.
+     */
+    private fun toolsFor(kind: WorkerKind, tools: List<Tool>): List<Tool> = when (kind) {
+        WorkerKind.UI -> tools.filter { it.matchesAny(UI_TOOL_HINTS) }
+        WorkerKind.SYSTEM -> tools.filter { it.matchesAny(SYSTEM_TOOL_HINTS) }
+        WorkerKind.RESEARCH -> tools.filter { it.matchesAny(RESEARCH_TOOL_HINTS) }
+        WorkerKind.GENERAL -> tools
+    }
+
+    private fun Tool.matchesAny(hints: List<String>): Boolean {
+        val name = schema.name.lowercase()
+        return hints.any { hint -> name.contains(hint) }
+    }
+
+    private fun StepStatus.toOverlayStatus(): OverlayStepStatus = when (this) {
+        StepStatus.PENDING -> OverlayStepStatus.PENDING
+        StepStatus.RUNNING -> OverlayStepStatus.RUNNING
+        StepStatus.DONE -> OverlayStepStatus.DONE
+        StepStatus.FAILED -> OverlayStepStatus.FAILED
+        StepStatus.SKIPPED -> OverlayStepStatus.SKIPPED
+    }
 }
+
+/** Tool-name fragments per worker role; matched case-insensitively against [Tool.schema].name. */
+private val UI_TOOL_HINTS = listOf("android_ui", "android_files", "android_context")
+private val SYSTEM_TOOL_HINTS = listOf("android_shell", "android_files", "android_context", "notification")
+private val RESEARCH_TOOL_HINTS = listOf("android_files", "android_context", "web", "search", "memory")
+
+/** Stored in [AgentGoal.blockedReason] so the card can localise the reason instead of baking text in. */
+private const val GOAL_BLOCKED_ROUND_LIMIT = "round_limit"

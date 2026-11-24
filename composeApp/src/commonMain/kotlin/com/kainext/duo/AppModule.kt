@@ -1,9 +1,11 @@
 package com.kainext.duo
 
 import com.kainext.duo.data.AppSettings
+import com.kainext.duo.data.ContextFoldStore
 import com.kainext.duo.data.ConversationStorage
 import com.kainext.duo.data.DataRepository
 import com.kainext.duo.data.EmailStore
+import com.kainext.duo.data.GoalStore
 import com.kainext.duo.data.HeartbeatManager
 import com.kainext.duo.data.MemoryStore
 import com.kainext.duo.data.NotificationStore
@@ -12,6 +14,7 @@ import com.kainext.duo.data.SmsDraftStore
 import com.kainext.duo.data.SmsStore
 import com.kainext.duo.data.TaskScheduler
 import com.kainext.duo.data.TaskStore
+import com.kainext.duo.data.TodoStore
 import com.kainext.duo.data.ToolExecutor
 import com.kainext.duo.data.createConversationPersistence
 import com.kainext.duo.data.runMigrations
@@ -69,13 +72,22 @@ val appModule = module {
         ConversationStorage(get(), createConversationPersistence(get()))
     }
     single<ToolExecutor> {
-        ToolExecutor()
+        ToolExecutor(appSettings = get())
     }
     single<MemoryStore> {
         MemoryStore(get())
     }
     single<TaskStore> {
         TaskStore(get())
+    }
+    single<TodoStore> {
+        TodoStore(get())
+    }
+    single<GoalStore> {
+        GoalStore(get())
+    }
+    single<ContextFoldStore> {
+        ContextFoldStore(get())
     }
     single<EmailStore> {
         EmailStore(get())
@@ -137,6 +149,7 @@ val appModule = module {
             skillManager = get(),
             sandboxController = get(),
             localInferenceEngine = createLocalInferenceEngine(),
+            contextFoldStore = get(),
         )
     }
     single<DataRepository> { get<RemoteDataRepository>() }
@@ -168,5 +181,5 @@ val appModule = module {
     // Same browser, second environment: Kai Build's Debian instead of the chat sandbox.
     viewModel(KAI_BUILD_FILES) { SandboxFileBrowserViewModel(get<KaiBuildController>().files) }
     viewModel { SplinterlandsViewModel(get<DataRepository>(), get(), get(), get<SplinterlandsApi>()) }
-    viewModel { ChatViewModel(get<DataRepository>(), get<TaskScheduler>(), localNetworkPermissionController = get(permissionQualifier(AppPermission.LOCAL_NETWORK))) }
+    viewModel { ChatViewModel(get<DataRepository>(), get<TaskScheduler>(), localNetworkPermissionController = get(permissionQualifier(AppPermission.LOCAL_NETWORK)), todoStore = get(), goalStore = get()) }
 }

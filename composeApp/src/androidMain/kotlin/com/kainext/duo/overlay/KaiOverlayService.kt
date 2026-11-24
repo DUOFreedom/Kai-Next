@@ -14,6 +14,10 @@ import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.text.InputType
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
+import android.text.style.StyleSpan
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
@@ -58,6 +62,8 @@ class KaiOverlayService : Service() {
     private var rootView: View? = null
     private var layoutParams: WindowManager.LayoutParams? = null
     private var statusView: TextView? = null
+    private var narrationView: TextView? = null
+    private var planView: TextView? = null
     private var logView: TextView? = null
     private var logScroll: ScrollView? = null
     private var messageInput: EditText? = null
@@ -117,9 +123,15 @@ class KaiOverlayService : Service() {
             Log.w(TAG, "SYSTEM_ALERT_WINDOW not granted; cannot show the control window")
             return false
         }
+        // Fixed height, not WRAP_CONTENT: the window is a monitor, and a monitor that grows with
+        // its own output ends up covering the screen it is meant to be watching. The log scrolls
+        // inside this box instead. The height is capped against the display so a small phone still
+        // shows the message field and buttons.
+        val screenHeight = resources.displayMetrics.heightPixels
+        val windowHeight = (screenHeight * 0.55f).toInt().coerceIn(dp(280), dp(460))
         val params = WindowManager.LayoutParams(
             dp(292),
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            windowHeight,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
@@ -203,12 +215,39 @@ class KaiOverlayService : Service() {
         }
         root.addView(statusView)
 
-        // Log: monospace, bounded height, scrolled to the newest line on every update.
+        // Narration: the model's own account of what it just did and what it will do next
+        // ("Opened QQ, next tapping the search box"). Pinned above the log so it never scrolls
+        // out of view — it is the one line that explains the log below it.
+        narrationView = TextView(this).apply {
+            setTextColor(COLOR_NARRATION)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setPadding(0, dp(6), 0, 0)
+            maxLines = 4
+            visibility = View.GONE
+        }
+        root.addView(narrationView)
+
+        // Team-mode plan: a compact checklist. Hidden outside team mode so a single-agent run
+        // does not pay for empty space.
+        planView = TextView(this).apply {
+            setTextColor(COLOR_MUTED)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            typeface = android.graphics.Typeface.MONOSPACE
+            setPadding(0, dp(6), 0, 0)
+            visibility = View.GONE
+        }
+        root.addView(planView)
+
+        // Log: monospace, weight 1 so it absorbs the leftover height and scrolls internally
+        // instead of pushing the window taller.
         logScroll = ScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = dp(8) }
+                0,
+            ).apply {
+                weight = 1f
+                topMargin = dp(8)
+            }
             background = GradientDrawable().apply {
                 cornerRadius = dp(8).toFloat()
                 setColor(COLOR_LOG_BG)
@@ -312,12 +351,14 @@ class KaiOverlayService : Service() {
                     touchY = event.rawY
                     true
                 }
+
                 MotionEvent.ACTION_MOVE -> {
                     params.x = startX + (event.rawX - touchX).toInt()
                     params.y = startY + (event.rawY - touchY).toInt()
                     rootView?.let { runCatching { windowManager.updateViewLayout(it, params) } }
                     true
                 }
+
                 else -> false
             }
         }
@@ -345,12 +386,30 @@ class KaiOverlayService : Service() {
             OverlayPhase.DONE -> "Kai Next · done"
             OverlayPhase.FAILED -> "Kai Next · failed"
         }
+        // Narration sits above the log, pinned: it is the sentence that explains the log.
+        if (state.narration.isBlank()) {
+            narrationView?.visibility = View.GONE
+        } else {
+            narrationView?.visibility = View.VISIBLE
+            narrationView?.text = state.narration
+        }
+
+        // Team mode: the plan as a checklist, so the user can see which worker is on which step
+        // without opening the app.
+        if (!state.isTeamMode || state.plan.isEmpty()) {
+            planView?.visibility = View.GONE
+        } else {
+            planView?.visibility = View.VISIBLE
+            planView?.text = buildPlanSpans(state)
+        }
+
         if (state.log.isEmpty()) {
             logScroll?.visibility = View.GONE
         } else {
             logScroll?.visibility = View.VISIBLE
-            logView?.text = state.log.joinToString("\n") { it.text }
-            // Follow the tail: the window's purpose is to show what is happening *now*.
+            logView?.text = buildLogSpans(state)
+            // Follow the tail: the window's purpose is to show what is happening *now*. Inside a
+            // fixed-height box this scrolls the log, it does not grow the window.
             logScroll?.post { logScroll?.fullScroll(View.FOCUS_DOWN) }
         }
         sendButton?.isEnabled = state.isRunning
@@ -358,6 +417,77 @@ class KaiOverlayService : Service() {
         if (!state.isVisible) {
             stopSelf()
         }
+    }
+
+    // ---- span builders ----
+
+    /**
+     * Colours each log line by what kind of event it is, so a wall of text can be read at a
+     * glance: narration italic, tool calls in the accent colour, results in the body colour,
+     * failures red.
+     */
+    private fun buildLogSpans(state: OverlayState): CharSequence {
+        val builder = SpannableStringBuilder()
+        state.log.forEachIndexed { position, line ->
+            if (position > 0) builder.append('\n')
+            val start = builder.length
+            builder.append(line.text)
+            val end = builder.length
+            builder.setSpan(
+                ForegroundColorSpan(lineColor(line)),
+                start,
+                end,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+            )
+            if (line.kind == OverlayLineKind.NARRATION) {
+                builder.setSpan(
+                    StyleSpan(android.graphics.Typeface.ITALIC),
+                    start,
+                    end,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                )
+            }
+        }
+        return builder
+    }
+
+    private fun lineColor(line: OverlayLogLine): Int = when (line.kind) {
+        OverlayLineKind.NARRATION -> COLOR_NARRATION
+        OverlayLineKind.TOOL -> if (line.isError) COLOR_ERROR else COLOR_PRIMARY
+        OverlayLineKind.RESULT -> if (line.isError) COLOR_ERROR else COLOR_LOG_TEXT
+        OverlayLineKind.SYSTEM -> if (line.isError) COLOR_ERROR else COLOR_MUTED
+    }
+
+    private fun buildPlanSpans(state: OverlayState): CharSequence {
+        val builder = SpannableStringBuilder()
+        state.plan.forEachIndexed { position, step ->
+            if (position > 0) builder.append('\n')
+            val start = builder.length
+            builder.append(stepGlyph(step.status)).append(' ').append(step.text)
+            builder.setSpan(
+                ForegroundColorSpan(stepColor(step.status)),
+                start,
+                builder.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+            )
+        }
+        return builder
+    }
+
+    private fun stepGlyph(status: OverlayStepStatus): String = when (status) {
+        OverlayStepStatus.PENDING -> "[ ]"
+        OverlayStepStatus.RUNNING -> "[~]"
+        OverlayStepStatus.DONE -> "[x]"
+        OverlayStepStatus.FAILED -> "[!]"
+        OverlayStepStatus.SKIPPED -> "[-]"
+    }
+
+    private fun stepColor(status: OverlayStepStatus): Int = when (status) {
+        OverlayStepStatus.PENDING -> COLOR_MUTED
+        OverlayStepStatus.RUNNING -> COLOR_WAITING
+        OverlayStepStatus.DONE -> COLOR_DONE
+        OverlayStepStatus.FAILED -> COLOR_ERROR
+        OverlayStepStatus.SKIPPED -> COLOR_IDLE
     }
 
     // ---- notification ----
@@ -453,3 +583,4 @@ private val COLOR_ERROR = Color.parseColor("#F28B82")
 private val COLOR_WAITING = Color.parseColor("#FDD663")
 private val COLOR_DONE = Color.parseColor("#81C995")
 private val COLOR_IDLE = Color.parseColor("#8E918F")
+private val COLOR_NARRATION = Color.parseColor("#D7E3FF")

@@ -1,17 +1,17 @@
 package com.kainext.duo.tools
 
+import android.util.Base64
 import com.kainext.duo.KaiAccessibilityService
+import com.kainext.duo.capture.ScreenCaptureController
+import com.kainext.duo.network.tools.ParameterSchema
+import com.kainext.duo.network.tools.Tool
+import com.kainext.duo.network.tools.ToolInfo
+import com.kainext.duo.network.tools.ToolSchema
 import com.kainext.duo.tools.uitree.UiAction
 import com.kainext.duo.tools.uitree.UiActionExecutor
 import com.kainext.duo.tools.uitree.UiActionResult
 import com.kainext.duo.tools.uitree.UiTreePruner
 import com.kainext.duo.tools.uitree.UiTreeShellFallback
-
-import android.util.Base64
-import com.kainext.duo.network.tools.ParameterSchema
-import com.kainext.duo.network.tools.Tool
-import com.kainext.duo.network.tools.ToolInfo
-import com.kainext.duo.network.tools.ToolSchema
 import kotlin.time.Duration.Companion.seconds
 
 private const val MAX_FILE_BYTES = 200_000
@@ -306,7 +306,9 @@ class AndroidUiTool(private val shell: PrivilegedShell) : Tool {
             }
 
             "back" -> run(UiAction.Key("BACK"), includeNodes)
+
             "home" -> run(UiAction.Key("HOME"), includeNodes)
+
             "recents" -> run(UiAction.Key("RECENTS"), includeNodes)
 
             "launch" -> {
@@ -342,7 +344,7 @@ class AndroidUiTool(private val shell: PrivilegedShell) : Tool {
             }
 
             "current_app" -> {
-                val a11yPkg = KaiAccessibilityService.current()?.activeRoot()?.packageName?.toString()
+                val a11yPkg = KaiAccessibilityService.current()?.foregroundAppPackage()
                 if (a11yPkg != null) {
                     mapOf("success" to true, "backend" to "accessibility", "package" to a11yPkg)
                 } else {
@@ -365,8 +367,7 @@ class AndroidUiTool(private val shell: PrivilegedShell) : Tool {
     }
 
     /** Runs one action and turns the executor's result into a tool reply. */
-    private suspend fun run(action: UiAction, includeNodes: Boolean): Map<String, Any> =
-        uiActions.execute(action).toToolMap(includeNodes)
+    private suspend fun run(action: UiAction, includeNodes: Boolean): Map<String, Any> = uiActions.execute(action).toToolMap(includeNodes)
 
     /** The current screen as prompt text, or null when neither backend can produce a tree. */
     private suspend fun snapshotPrompt(): String? {
@@ -467,7 +468,11 @@ class AndroidUiTool(private val shell: PrivilegedShell) : Tool {
 
     /** The package that currently owns input focus, from accessibility or `dumpsys window`. */
     private suspend fun foregroundPackage(): String? {
-        KaiAccessibilityService.current()?.activeRoot()?.packageName?.toString()?.let { return it }
+        // The accessibility answer is the app window, not `rootInActiveWindow`: Kai's own
+        // overlay is a focused TYPE_APPLICATION_OVERLAY window, and trusting the focused window
+        // would report "com.kainext.duo" for every app the user brought forward while the
+        // overlay was visible.
+        KaiAccessibilityService.current()?.foregroundAppPackage()?.let { return it }
         val result = shell.execute(
             "dumpsys window 2>/dev/null | grep -E 'mCurrentFocus|mFocusedApp' | head -2",
         )
@@ -489,18 +494,95 @@ class AndroidUiTool(private val shell: PrivilegedShell) : Tool {
     private suspend fun screenshot(includeBase64: Boolean): Map<String, Any> {
         val path = "/sdcard/kai_screenshot_${System.currentTimeMillis()}.png"
         val result = shell.execute("screencap -p ${shell.shellQuote(path)} 2>&1 && echo OK")
-        if (!result.success) return result.asToolMap() + mapOf("error" to "screencap failed")
-        val file = java.io.File(path)
-        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        runCatching { android.graphics.BitmapFactory.decodeFile(path, bounds) }
+        if (result.success) {
+            return screenshotReply(path = path, backend = result.backend, file = java.io.File(path), includeBase64 = includeBase64)
+        }
+        // A projection the user already approved needs no root and keeps producing frames while
+        // Kai sits in the background — which is the state a UI-automation loop leaves it in.
+        projectionScreenshot(includeBase64)?.let { return it }
+        // No root and no Shizuku, so the shell cannot run screencap at all. The accessibility
+        // service can still produce the image (Android 11+), which is what makes the action work
+        // for users who granted only that — the privilege mode the agent is most often run under.
+        val service = KaiAccessibilityService.current()
+        val bitmap = service?.captureScreenshotBitmap()
+        if (service != null && bitmap != null) {
+            val file = java.io.File(service.cacheDir, "kai_screenshot_${System.currentTimeMillis()}.png")
+            val written = runCatching {
+                java.io.FileOutputStream(file).use { out ->
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                }
+            }.getOrDefault(false)
+            val width = bitmap.width
+            val height = bitmap.height
+            bitmap.recycle()
+            if (written) {
+                return screenshotReply(
+                    path = file.absolutePath,
+                    backend = "accessibility",
+                    file = file,
+                    includeBase64 = includeBase64,
+                    width = width,
+                    height = height,
+                )
+            }
+        }
+        return result.asToolMap() + mapOf(
+            "error" to "screencap failed, no screen-capture consent is active, and no accessibility " +
+                "screenshot is available (accessibility not enabled, or Android older than 11)",
+        )
+    }
+
+    /**
+     * A frame from a projection the user already approved, written to app-private storage.
+     *
+     * Returns null rather than an error when nothing is capturing: this is the middle backend, not
+     * a feature the caller asked for, so a missing consent is the normal case and falls through to
+     * the accessibility service.
+     */
+    private suspend fun projectionScreenshot(includeBase64: Boolean): Map<String, Any>? {
+        val bytes = runCatching { ScreenCaptureController.capture() }.getOrNull() ?: return null
+        if (bytes.isEmpty()) return null
+        val context = runCatching {
+            org.koin.java.KoinJavaComponent.get(android.content.Context::class.java) as android.content.Context
+        }.getOrNull() ?: return null
+        val file = java.io.File(context.cacheDir, "kai_screenshot_${System.currentTimeMillis()}.png")
+        if (!runCatching { file.writeBytes(bytes) }.isSuccess) return null
+        return screenshotReply(
+            path = file.absolutePath,
+            backend = "projection",
+            file = file,
+            includeBase64 = includeBase64,
+        )
+    }
+
+    /**
+     * Shapes a screenshot reply. [width]/[height] are passed in when the caller already holds the
+     * bitmap (the accessibility path does); otherwise they are read back from the PNG on disk.
+     */
+    private fun screenshotReply(
+        path: String,
+        backend: String,
+        file: java.io.File,
+        includeBase64: Boolean,
+        width: Int = 0,
+        height: Int = 0,
+    ): Map<String, Any> {
+        var outWidth = width
+        var outHeight = height
+        if (outWidth <= 0 || outHeight <= 0) {
+            val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            runCatching { android.graphics.BitmapFactory.decodeFile(path, bounds) }
+            outWidth = bounds.outWidth
+            outHeight = bounds.outHeight
+        }
         return buildMap<String, Any> {
             put("success", true)
-            put("backend", result.backend)
+            put("backend", backend)
             put("path", path)
             put("bytes", file.length())
-            if (bounds.outWidth > 0 && bounds.outHeight > 0) {
-                put("width", bounds.outWidth)
-                put("height", bounds.outHeight)
+            if (outWidth > 0 && outHeight > 0) {
+                put("width", outWidth)
+                put("height", outHeight)
             }
             put("note", "full-resolution PNG, not scaled or re-encoded")
             if (includeBase64 && file.isFile && file.length() <= MAX_INLINE_SCREENSHOT_BYTES) {

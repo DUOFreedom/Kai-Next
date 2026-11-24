@@ -442,7 +442,7 @@
     <string name="kai_build_setup_agents_title">Агенти за код</string>
     <string name="kai_build_setup_agents_description">Изберете CLI-тата за инсталиране на чистата система. Останалите можете да добавите по-късно.</string>
     <string name="kai_build_setup_install">Инсталирай Debian</string>
-    <string name="kai_build_step_download">Изтегляне на Debian… %1$d%%</string>
+    <string name="kai_build_step_download">Изтегляне на Debian… %1$s</string>
     <string name="kai_build_step_extract">Извличане на rootfs…</string>
     <string name="kai_build_step_configure">Конфигуриране на Debian…</string>
     <string name="kai_build_step_base_packages">Инсталиране на базови пакети…</string>

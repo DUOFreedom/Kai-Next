@@ -442,7 +442,7 @@
     <string name="kai_build_setup_agents_title">程式代理</string>
     <string name="kai_build_setup_agents_description">選擇要在全新系統上安裝的 CLI。其餘可稍後再新增。</string>
     <string name="kai_build_setup_install">安裝 Debian</string>
-    <string name="kai_build_step_download">正在下載 Debian… %1$d%%</string>
+    <string name="kai_build_step_download">正在下載 Debian… %1$s</string>
     <string name="kai_build_step_extract">正在解壓 rootfs…</string>
     <string name="kai_build_step_configure">正在設定 Debian…</string>
     <string name="kai_build_step_base_packages">正在安裝基礎套件…</string>

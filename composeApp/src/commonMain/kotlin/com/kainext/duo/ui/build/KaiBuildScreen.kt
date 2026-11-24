@@ -322,7 +322,9 @@ private fun SetupContent(
 @Composable
 private fun stageLabel(stage: KaiBuildStage?): String? = when (stage) {
     null -> null
-    is KaiBuildStage.Download -> stringResource(Res.string.kai_build_step_download, stage.percent)
+    // The percent sign travels through the argument, never through the resource: stringResource
+    // does not reliably collapse "%%" back to "%" on every platform.
+    is KaiBuildStage.Download -> stringResource(Res.string.kai_build_step_download, "${stage.percent}%")
     KaiBuildStage.Extract -> stringResource(Res.string.kai_build_step_extract)
     KaiBuildStage.Configure -> stringResource(Res.string.kai_build_step_configure)
     KaiBuildStage.BasePackages -> stringResource(Res.string.kai_build_step_base_packages)

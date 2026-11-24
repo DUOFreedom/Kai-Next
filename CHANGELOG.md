@@ -4,9 +4,33 @@
 - Show per-turn token usage and the context-window proportion under each assistant message
 - Choose a thinking effort (None/Low/Medium/High) per model; sent as `reasoning_effort` on chat completions and `reasoning.effort` on the Responses API
 - Device control: run shell commands, read/write `/sdcard` and drive the phone UI with root or Shizuku privileges (Settings → Device)
+- Goals: give the assistant an objective with a round budget and let it keep working across turns
+- Task list: the assistant can publish an ordered plan and tick steps off as it goes
+- Subagents: delegate a self-contained task to a nested agent with its own step budget
+- Tool approval: high-impact tools ask before they run, with per-tool "always allow" and three policies in Settings → Tools
+- Context folding: compaction keeps the replaced transcript on device so earlier context can be searched and read back
+- Team mode: one request becomes a short plan of steps, each run by a specialist worker, with the plan and per-step progress shown in chat
+- Tool call limits are configurable: 100 iterations, 5 repeated calls and 20 parallel calls by default
+- Screen capture: the user approves a MediaProjection once in Settings → Device, and the assistant then reads the screen from it — no root, no Shizuku, and frames keep arriving while the app is in the background
+
+### Fixes
+- The `android_ui` screenshot action reaches an approved projection; before this it only had the privileged shell and accessibility backends, so the third one never fed the agent anything
+- The screen-capture switch follows the projection's own state flow, so a consent prompt answered slowly no longer reports capture as off, and a stop from the system UI no longer leaves the switch showing on
+- Stopping capture from the app shuts the projection down in-process instead of posting a background service intent that Android rejects, which used to leave the projection running
+- The capture notification no longer throws when the launcher intent cannot be resolved
+- Restore the curated model catalog entries that a rewrite had dropped, and keep the per-model capability flags
+- Enforce the team run's parallel-step cap, and report the plan the run actually used rather than the planner's untrimmed reply
+- Mark a clipped blackboard digest as incomplete instead of letting the truncation look like the end of the work
+- Show reasoning while it is still streaming: a turn whose trace arrives before any answer text used to render nothing at all, leaving only the generic waiting row
+- Scroll the waiting row into view when a request starts, so a turn that has begun but not produced any text yet no longer looks like a frozen screen
 
 ### Improvements
-- Strip the project to the Android app: iOS, desktop, WebAssembly and their test harnesses are removed
+- Strip the project to the Android app: iOS, desktop, WebAssembly and their test harnesses are removed, along with the DMG/MSI/DEB/RPM/AppImage/Flatpak release jobs and the winget, flatpak and AUR workflows
+- Update the feature docs for goals, task lists, subagents, tool approval, context folding, team mode and Kai Build, and drop the desktop release smoke test
+- Drop the screen-capture strings and the accessibility label that nothing read, and give the capture notification a Simplified and Traditional Chinese wording
+- Streaming answers reach the UI on a fixed cadence instead of once per token, so a long reply no longer rebuilds the transcript, the markdown document and the stats strip hundreds of times
+- The chat screen derives its reasoning groups, tool summaries and submission pairings only when those slices actually change, instead of on every streamed frame
+- The active service, its model and the accepted file extensions are read from settings without re-parsing the same JSON on every frame
 
 ## v3.3.0 — 2026-10-02
 

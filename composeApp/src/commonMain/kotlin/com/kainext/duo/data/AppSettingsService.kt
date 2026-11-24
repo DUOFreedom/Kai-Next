@@ -47,12 +47,26 @@ fun AppSettings.setBaseUrl(service: Service, baseUrl: String) {
 }
 
 // Configured services (ordered list of service instances)
+
+/**
+ * Last parsed value of [KEY_CONFIGURED_SERVICES], paired with the raw JSON it came from.
+ *
+ * The list is read from several places that all run while a reply is streaming (the chat state
+ * rebuild asks for the active service, its model id, and the accepted file extensions, and each of
+ * those walks the configured instances). Parsing the same JSON three times per streamed frame is
+ * pure waste, so the parse is memoized on the raw string — a write changes the string, which
+ * invalidates the entry by itself. Replaced as one immutable value so a concurrent reader sees
+ * either the old or the new pair, never a half-updated one.
+ */
+private var cachedServiceInstances: Pair<String, List<ServiceInstance>>? = null
+
 fun AppSettings.getConfiguredServiceInstances(): List<ServiceInstance> {
     val json = settings.getString(KEY_CONFIGURED_SERVICES, "")
     if (json.isBlank()) return emptyList()
+    cachedServiceInstances?.let { (cachedJson, cached) -> if (cachedJson == json) return cached }
     return try {
         val array = Json.parseToJsonElement(json).jsonArray
-        array.map { element ->
+        val parsed = array.map { element ->
             if (element is JsonObject) {
                 ServiceInstance(
                     instanceId = element["instanceId"]?.jsonPrimitive?.content ?: "",
@@ -63,6 +77,8 @@ fun AppSettings.getConfiguredServiceInstances(): List<ServiceInstance> {
                 ServiceInstance(instanceId = id, serviceId = id)
             }
         }.filter { it.instanceId.isNotBlank() && it.serviceId.isNotBlank() }
+        cachedServiceInstances = json to parsed
+        parsed
     } catch (_: Exception) {
         emptyList()
     }

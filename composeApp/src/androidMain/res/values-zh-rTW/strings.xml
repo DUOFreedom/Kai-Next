@@ -5,4 +5,8 @@
     <string name="download_channel_name">模型下載</string>
     <string name="download_channel_description">下載 AI 模型時顯示進度</string>
     <string name="download_notification_text">正在下載模型…</string>
+    <string name="screen_capture_channel_name">螢幕擷取</string>
+    <string name="screen_capture_channel_description">Kai 為 AI 鏡像螢幕時顯示。</string>
+    <string name="screen_capture_notification_title">螢幕擷取已開啟</string>
+    <string name="screen_capture_notification_text">AI 在工作時可以看見這個螢幕。</string>
 </resources>

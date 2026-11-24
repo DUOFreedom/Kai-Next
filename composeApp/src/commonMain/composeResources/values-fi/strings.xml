@@ -443,7 +443,7 @@ Jos jokin vaatii huomiota (vanhentuneet muistot, erääntyneet tehtävät, käyt
     <string name="kai_build_setup_agents_title">Koodausagentit</string>
     <string name="kai_build_setup_agents_description">Valitse CLI:t asennettavaksi puhtaaseen järjestelmään. Muut voit lisätä myöhemmin.</string>
     <string name="kai_build_setup_install">Asenna Debian</string>
-    <string name="kai_build_step_download">Ladataan Debiania… %1$d%%</string>
+    <string name="kai_build_step_download">Ladataan Debiania… %1$s</string>
     <string name="kai_build_step_extract">Puretaan rootfs…</string>
     <string name="kai_build_step_configure">Määritetään Debiania…</string>
     <string name="kai_build_step_base_packages">Asennetaan peruspaketteja…</string>

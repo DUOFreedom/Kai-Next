@@ -443,7 +443,7 @@ As iets aandag nodig het (verouderde herinneringe, verskuldigde take, gebruiker-
     <string name="kai_build_setup_agents_title">Kodeeragente</string>
     <string name="kai_build_setup_agents_description">Kies die CLI\'s om op die vars stelsel te installeer. Jy kan die res later byvoeg.</string>
     <string name="kai_build_setup_install">Installeer Debian</string>
-    <string name="kai_build_step_download">Laai Debian af… %1$d%%</string>
+    <string name="kai_build_step_download">Laai Debian af… %1$s</string>
     <string name="kai_build_step_extract">Pak rootfs uit…</string>
     <string name="kai_build_step_configure">Stel Debian op…</string>
     <string name="kai_build_step_base_packages">Installeer basiese pakkette…</string>

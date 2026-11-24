@@ -441,7 +441,7 @@
     <string name="kai_build_setup_agents_title">Ejen pengkodan</string>
     <string name="kai_build_setup_agents_description">Pilih CLI untuk dipasang pada sistem baharu. Anda boleh menambah yang lain kemudian.</string>
     <string name="kai_build_setup_install">Pasang Debian</string>
-    <string name="kai_build_step_download">Memuat turun Debian… %1$d%%</string>
+    <string name="kai_build_step_download">Memuat turun Debian… %1$s</string>
     <string name="kai_build_step_extract">Mengekstrak rootfs…</string>
     <string name="kai_build_step_configure">Mengkonfigurasi Debian…</string>
     <string name="kai_build_step_base_packages">Memasang pakej asas…</string>

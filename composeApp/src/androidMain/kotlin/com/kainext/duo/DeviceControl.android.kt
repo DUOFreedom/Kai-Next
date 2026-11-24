@@ -1,8 +1,11 @@
 package com.kainext.duo
 
+import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import android.util.Log
+import com.kainext.duo.capture.ScreenCaptureController
+import com.kainext.duo.capture.ScreenCaptureService
 import com.kainext.duo.data.AppSettings
 import com.kainext.duo.overlay.KaiOverlayService
 import com.kainext.duo.tools.PrivilegedMode
@@ -26,26 +29,40 @@ actual class DeviceControlManager actual constructor() {
         val accessibility = isAccessibilityConnected()
         val effective = when {
             configured == PrivilegedMode.ROOT && root -> "root"
+
             configured == PrivilegedMode.ROOT -> "none"
+
             configured == PrivilegedMode.SHIZUKU && shizukuGranted -> "shizuku"
+
             configured == PrivilegedMode.SHIZUKU -> "none"
+
             configured == PrivilegedMode.ACCESSIBILITY && accessibility -> "accessibility"
+
             configured == PrivilegedMode.ACCESSIBILITY -> "none"
+
             // Auto prefers root, then Shizuku, then accessibility: the first two give a full
             // shell, which can do strictly more than the accessibility service alone.
             root -> "root"
+
             shizukuGranted -> "shizuku"
+
             accessibility -> "accessibility"
+
             else -> "none"
         }
         val detail = when {
             effective == "root" -> "Root shell available (su)"
+
             effective == "shizuku" -> "Shizuku connected (adb shell privileges)"
+
             effective == "accessibility" -> "Accessibility service connected (screen reading + gestures)"
+
             !binderAlive && !root && !accessibility ->
                 "Grant root, connect Shizuku, or enable the accessibility service"
+
             binderAlive && !shizukuGranted && !accessibility ->
                 "Shizuku is running — grant permission in the Shizuku app, or enable accessibility"
+
             else -> null
         }
         return DeviceControlStatus(
@@ -103,12 +120,24 @@ actual class DeviceControlManager actual constructor() {
         KaiOverlayService.stop(appContext())
     }
 
+    // Screen capture (MediaProjection)
+    actual fun isScreenCaptureSupported(): Boolean = ScreenCaptureController.isSupported()
+
+    actual val screenCaptureActive: kotlinx.coroutines.flow.StateFlow<Boolean> = ScreenCaptureService.active
+
+    actual fun isScreenCaptureActive(): Boolean = ScreenCaptureController.isActive()
+
+    actual fun requestScreenCapture(): Boolean = ScreenCaptureController.request(appContext())
+
+    actual fun stopScreenCapture() = ScreenCaptureController.stop(appContext())
+
+    actual suspend fun captureScreen(): ByteArray? = ScreenCaptureController.capture()
+
     /**
      * The application context, resolved from Koin rather than stored as a field: this class is
      * created by Koin and holding a Context in a field would outlive the activity it came from.
      */
-    private fun appContext(): android.content.Context =
-        KoinJavaComponent.get(android.content.Context::class.java)
+    private fun appContext(): android.content.Context = KoinJavaComponent.get(android.content.Context::class.java)
 
     actual suspend fun keepAccessibilityAlive(): Boolean {
         val component = "com.kainext.duo/com.kainext.duo.KaiAccessibilityService"

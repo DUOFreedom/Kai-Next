@@ -442,7 +442,7 @@
     <string name="kai_build_setup_agents_title">Kodeerimisagendid</string>
     <string name="kai_build_setup_agents_description">Vali CLI-d, mis paigaldatakse puhtale süsteemile. Ülejäänud saad lisada hiljem.</string>
     <string name="kai_build_setup_install">Paigalda Debian</string>
-    <string name="kai_build_step_download">Debianit laaditakse… %1$d%%</string>
+    <string name="kai_build_step_download">Debianit laaditakse… %1$s</string>
     <string name="kai_build_step_extract">Rootfs-i lahtipakkimine…</string>
     <string name="kai_build_step_configure">Debiani seadistamine…</string>
     <string name="kai_build_step_base_packages">Baaspakettide paigaldamine…</string>

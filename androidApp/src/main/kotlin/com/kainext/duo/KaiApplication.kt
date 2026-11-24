@@ -20,6 +20,10 @@ class KaiApplication : Application() {
             androidContext(this@KaiApplication)
             modules(appModule, sandboxModule)
         }
+        // Build the model catalog off the main thread. The chat screen resolves a context window
+        // while composing its first frame, and that lookup would otherwise construct the whole
+        // catalog on the main thread during cold start.
+        warmUpModelCatalogAsync()
         // Track app foreground state so the scheduler only pushes a heartbeat notification
         // when the in-app banner isn't visible. ViewModel lifecycle is the wrong signal —
         // it survives backgrounding and only clears on Activity destruction.

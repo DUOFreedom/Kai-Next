@@ -441,7 +441,7 @@
     <string name="kai_build_setup_agents_title">Mawakala wa usimbaji</string>
     <string name="kai_build_setup_agents_description">Chagua CLI za kusakinisha kwenye mfumo mpya. Unaweza kuongeza zingine baadaye.</string>
     <string name="kai_build_setup_install">Sakinisha Debian</string>
-    <string name="kai_build_step_download">Inapakua Debian… %1$d%%</string>
+    <string name="kai_build_step_download">Inapakua Debian… %1$s</string>
     <string name="kai_build_step_extract">Inatoa rootfs…</string>
     <string name="kai_build_step_configure">Inasanidi Debian…</string>
     <string name="kai_build_step_base_packages">Inasakinisha vifurushi vya msingi…</string>

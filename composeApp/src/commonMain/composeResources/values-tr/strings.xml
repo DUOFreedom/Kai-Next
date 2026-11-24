@@ -442,7 +442,7 @@ Bir şey dikkat gerektiriyorsa (eski anılar, vadesi geçmiş görevler, kullan�
     <string name="kai_build_setup_agents_title">Kodlama aracıları</string>
     <string name="kai_build_setup_agents_description">Yeni sisteme kurulacak CLI\'ları seçin. Diğerlerini daha sonra ekleyebilirsiniz.</string>
     <string name="kai_build_setup_install">Debian\'ı kur</string>
-    <string name="kai_build_step_download">Debian indiriliyor… %1$d%%</string>
+    <string name="kai_build_step_download">Debian indiriliyor… %1$s</string>
     <string name="kai_build_step_extract">rootfs çıkarılıyor…</string>
     <string name="kai_build_step_configure">Debian yapılandırılıyor…</string>
     <string name="kai_build_step_base_packages">Temel paketler kuruluyor…</string>

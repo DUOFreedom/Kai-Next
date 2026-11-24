@@ -23,6 +23,12 @@ import androidx.compose.ui.unit.dp
 import com.kainext.duo.DeviceControlStatus
 import com.kainext.duo.ui.handCursor
 import kai.composeapp.generated.resources.Res
+import kai.composeapp.generated.resources.settings_device_capture_active
+import kai.composeapp.generated.resources.settings_device_capture_description
+import kai.composeapp.generated.resources.settings_device_capture_inactive
+import kai.composeapp.generated.resources.settings_device_capture_start
+import kai.composeapp.generated.resources.settings_device_capture_stop
+import kai.composeapp.generated.resources.settings_device_capture_title
 import kai.composeapp.generated.resources.settings_device_checking
 import kai.composeapp.generated.resources.settings_device_control_description
 import kai.composeapp.generated.resources.settings_device_control_title
@@ -30,10 +36,10 @@ import kai.composeapp.generated.resources.settings_device_grant_shizuku
 import kai.composeapp.generated.resources.settings_device_mode_auto
 import kai.composeapp.generated.resources.settings_device_mode_root
 import kai.composeapp.generated.resources.settings_device_mode_shizuku
-import kai.composeapp.generated.resources.settings_device_overlay_title
 import kai.composeapp.generated.resources.settings_device_overlay_description
-import kai.composeapp.generated.resources.settings_device_overlay_permission_needed
 import kai.composeapp.generated.resources.settings_device_overlay_grant
+import kai.composeapp.generated.resources.settings_device_overlay_permission_needed
+import kai.composeapp.generated.resources.settings_device_overlay_title
 import kai.composeapp.generated.resources.settings_device_privileged_mode
 import kai.composeapp.generated.resources.settings_device_refresh
 import kai.composeapp.generated.resources.settings_device_sdcard_description
@@ -190,6 +196,57 @@ internal fun DeviceControlContent(
                 }
             }
 
+            // Screen capture (MediaProjection)
+            if (uiState.isScreenCaptureSupported) {
+                SettingsCard {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        ToggleableHeadline(
+                            title = stringResource(Res.string.settings_device_capture_title),
+                            description = stringResource(Res.string.settings_device_capture_description),
+                            checked = uiState.isScreenCaptureActive,
+                            onCheckedChange = { enabled ->
+                                if (enabled) actions.onRequestScreenCapture() else actions.onStopScreenCapture()
+                            },
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = if (uiState.isScreenCaptureActive) {
+                                stringResource(Res.string.settings_device_capture_active)
+                            } else {
+                                stringResource(Res.string.settings_device_capture_inactive)
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (uiState.isScreenCaptureActive) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
+                        if (!uiState.isScreenCaptureActive) {
+                            Spacer(Modifier.height(8.dp))
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(
+                                    onClick = actions.onRequestScreenCapture,
+                                    modifier = Modifier.handCursor(),
+                                ) {
+                                    Text(stringResource(Res.string.settings_device_capture_start))
+                                }
+                            }
+                        } else {
+                            Spacer(Modifier.height(8.dp))
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(
+                                    onClick = actions.onStopScreenCapture,
+                                    modifier = Modifier.handCursor(),
+                                ) {
+                                    Text(stringResource(Res.string.settings_device_capture_stop))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             SettingsCard {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     ToggleableHeadline(
@@ -255,9 +312,12 @@ private fun DeviceControlStatusRow(
             } else {
                 val (label, color) = when (status?.effectiveMode) {
                     "root" -> stringResource(Res.string.settings_device_status_root) to MaterialTheme.colorScheme.primary
+
                     "shizuku" -> stringResource(Res.string.settings_device_status_shizuku) to MaterialTheme.colorScheme.primary
+
                     "accessibility" ->
                         "Accessibility service connected" to MaterialTheme.colorScheme.primary
+
                     else -> stringResource(Res.string.settings_device_status_none) to MaterialTheme.colorScheme.error
                 }
                 Text(

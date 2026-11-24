@@ -32,6 +32,7 @@ data class OpenAIResponsesResponseDto(
     data class InputTokensDetails(
         @SerialName("cached_tokens") val cachedTokens: Int? = null,
     )
+
     @Serializable
     data class OutputItem(
         val type: String? = null,

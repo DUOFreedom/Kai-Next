@@ -9,22 +9,22 @@ import com.kainext.duo.data.FallbackStatus
 import com.kainext.duo.data.FreeMode
 import com.kainext.duo.data.Goal
 import com.kainext.duo.data.GoalStats
-import com.kainext.duo.data.toGoalStats
 import com.kainext.duo.data.HeartbeatConfig
 import com.kainext.duo.data.HeartbeatLogEntry
 import com.kainext.duo.data.ImportSection
 import com.kainext.duo.data.MemoryEntry
 import com.kainext.duo.data.ScheduledTask
 import com.kainext.duo.data.Service
-import com.kainext.duo.data.ThinkingEffort
-import com.kainext.duo.data.TokenUsage
 import com.kainext.duo.data.ServiceEntry
 import com.kainext.duo.data.ServiceInstance
 import com.kainext.duo.data.SmsDraft
 import com.kainext.duo.data.SmsSyncState
 import com.kainext.duo.data.SystemPromptVariant
 import com.kainext.duo.data.ThemeMode
+import com.kainext.duo.data.ThinkingEffort
+import com.kainext.duo.data.TokenUsage
 import com.kainext.duo.data.ensureSelectedModelPresent
+import com.kainext.duo.data.toGoalStats
 import com.kainext.duo.inference.DownloadError
 import com.kainext.duo.inference.DownloadedModel
 import com.kainext.duo.inference.EngineState
@@ -516,22 +516,50 @@ class FakeDataRepository : DataRepository {
         overlayVisible = false
     }
 
-    var deviceControlEnabled = false
-    var privilegedMode = "auto"
-    var deviceShellEnabled = true
-    var sdcardAccessEnabled = true
-    var uiAutomationEnabled = false
+    // Renamed backing fields: `var deviceControlEnabled` generates setDeviceControlEnabled(Z)V,
+    // which collides on the JVM signature with the DataRepository override below.
+    private var storedDeviceControlEnabled = false
+    private var storedPrivilegedMode = "auto"
+    private var storedDeviceShellEnabled = true
+    private var storedSdcardAccessEnabled = true
+    private var storedUiAutomationEnabled = false
 
-    override fun isDeviceControlEnabled(): Boolean = deviceControlEnabled
-    override fun setDeviceControlEnabled(enabled: Boolean) { deviceControlEnabled = enabled }
-    override fun getPrivilegedMode(): String = privilegedMode
-    override fun setPrivilegedMode(mode: String) { privilegedMode = mode }
-    override fun isDeviceShellEnabled(): Boolean = deviceShellEnabled
-    override fun setDeviceShellEnabled(enabled: Boolean) { deviceShellEnabled = enabled }
-    override fun isSdcardAccessEnabled(): Boolean = sdcardAccessEnabled
-    override fun setSdcardAccessEnabled(enabled: Boolean) { sdcardAccessEnabled = enabled }
-    override fun isUiAutomationEnabled(): Boolean = uiAutomationEnabled
-    override fun setUiAutomationEnabled(enabled: Boolean) { uiAutomationEnabled = enabled }
+    override fun isDeviceControlEnabled(): Boolean = storedDeviceControlEnabled
+    override fun setDeviceControlEnabled(enabled: Boolean) {
+        storedDeviceControlEnabled = enabled
+    }
+    override fun getPrivilegedMode(): String = storedPrivilegedMode
+    override fun setPrivilegedMode(mode: String) {
+        storedPrivilegedMode = mode
+    }
+    override fun isDeviceShellEnabled(): Boolean = storedDeviceShellEnabled
+    override fun setDeviceShellEnabled(enabled: Boolean) {
+        storedDeviceShellEnabled = enabled
+    }
+    override fun isSdcardAccessEnabled(): Boolean = storedSdcardAccessEnabled
+    override fun setSdcardAccessEnabled(enabled: Boolean) {
+        storedSdcardAccessEnabled = enabled
+    }
+    override fun isUiAutomationEnabled(): Boolean = storedUiAutomationEnabled
+    override fun setUiAutomationEnabled(enabled: Boolean) {
+        storedUiAutomationEnabled = enabled
+    }
+
+    // Screen capture (MediaProjection)
+    private var storedScreenCaptureSupported = false
+    private val storedScreenCaptureActive = MutableStateFlow(false)
+
+    override fun isScreenCaptureSupported(): Boolean = storedScreenCaptureSupported
+    override val screenCaptureActive: StateFlow<Boolean> = storedScreenCaptureActive
+    override fun isScreenCaptureActive(): Boolean = storedScreenCaptureActive.value
+    override fun requestScreenCapture(): Boolean {
+        storedScreenCaptureSupported = true
+        storedScreenCaptureActive.value = true
+        return true
+    }
+    override fun stopScreenCapture() {
+        storedScreenCaptureActive.value = false
+    }
 
     override fun getHeartbeatConfig(): HeartbeatConfig = HeartbeatConfig()
 
@@ -703,6 +731,8 @@ class FakeDataRepository : DataRepository {
     override fun getTotalDeviceMemoryBytes(): Long = Long.MAX_VALUE
     override fun getModelContextTokens(modelId: String): Int = 0
     override fun setModelContextTokens(modelId: String, contextTokens: Int) {}
+    override fun getModelMaxOutputTokens(modelId: String): Int = 0
+    override fun setModelMaxOutputTokens(modelId: String, maxOutputTokens: Int) {}
     override suspend fun releaseLocalEngine() {}
     override fun getLocalDownloadingModelId(): StateFlow<String?>? = null
     override fun getLocalDownloadProgress(): StateFlow<Float?>? = null

@@ -441,7 +441,7 @@
     <string name="kai_build_setup_agents_title">Кодтау агенттері</string>
     <string name="kai_build_setup_agents_description">Жаңа жүйеге орнатылатын CLI-ларды таңдаңыз. Қалғандарын кейін қосуға болады.</string>
     <string name="kai_build_setup_install">Debian орнату</string>
-    <string name="kai_build_step_download">Debian жүктелуде… %1$d%%</string>
+    <string name="kai_build_step_download">Debian жүктелуде… %1$s</string>
     <string name="kai_build_step_extract">rootfs шығарылуда…</string>
     <string name="kai_build_step_configure">Debian бапталуда…</string>
     <string name="kai_build_step_base_packages">Негізгі пакеттер орнатылуда…</string>

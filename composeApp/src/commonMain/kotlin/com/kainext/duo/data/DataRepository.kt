@@ -183,6 +183,30 @@ interface DataRepository {
     fun isUiAutomationEnabled(): Boolean
     fun setUiAutomationEnabled(enabled: Boolean)
 
+    // Screen capture (MediaProjection)
+
+    /** True when the platform supports MediaProjection (every Android version this app ships on). */
+    fun isScreenCaptureSupported(): Boolean
+
+    /**
+     * Live projection state. Watch this instead of calling [isScreenCaptureActive] once: the
+     * projection also ends when the user stops it from the system UI, and a single read would
+     * leave the settings switch showing capture as still on.
+     */
+    val screenCaptureActive: StateFlow<Boolean>
+
+    /** True at the instant of the call; prefer [screenCaptureActive] for anything user-facing. */
+    fun isScreenCaptureActive(): Boolean
+
+    /**
+     * Shows the system consent dialog and starts the capture service on success.
+     * Returns false when there is no activity to show the dialog from.
+     */
+    fun requestScreenCapture(): Boolean
+
+    /** Stops the capture service and drops the notification. Safe to call when nothing is running. */
+    fun stopScreenCapture()
+
     // Heartbeat
     fun getHeartbeatConfig(): HeartbeatConfig
     fun setHeartbeatEnabled(enabled: Boolean)
@@ -308,6 +332,8 @@ interface DataRepository {
     fun getTotalDeviceMemoryBytes(): Long
     fun getModelContextTokens(modelId: String): Int
     fun setModelContextTokens(modelId: String, contextTokens: Int)
+    fun getModelMaxOutputTokens(modelId: String): Int
+    fun setModelMaxOutputTokens(modelId: String, maxOutputTokens: Int)
     suspend fun releaseLocalEngine()
     fun getLocalDownloadingModelId(): StateFlow<String?>?
     fun getLocalDownloadProgress(): StateFlow<Float?>?

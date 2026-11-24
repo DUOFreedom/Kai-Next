@@ -47,13 +47,13 @@ import androidx.compose.ui.window.PopupProperties
 import com.kainext.duo.data.ServiceEntry
 import com.kainext.duo.data.ThinkingEffort
 import com.kainext.duo.ui.handCursor
-import kotlinx.collections.immutable.ImmutableList
 import kai.composeapp.generated.resources.Res
 import kai.composeapp.generated.resources.settings_thinking_effort_high
 import kai.composeapp.generated.resources.settings_thinking_effort_label
 import kai.composeapp.generated.resources.settings_thinking_effort_low
 import kai.composeapp.generated.resources.settings_thinking_effort_medium
 import kai.composeapp.generated.resources.settings_thinking_effort_none
+import kotlinx.collections.immutable.ImmutableList
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.vectorResource
 

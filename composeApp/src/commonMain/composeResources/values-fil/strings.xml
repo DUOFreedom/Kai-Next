@@ -441,7 +441,7 @@
     <string name="kai_build_setup_agents_title">Mga coding agent</string>
     <string name="kai_build_setup_agents_description">Piliin ang mga CLI na i-install sa bagong system. Maaari mong idagdag ang iba mamaya.</string>
     <string name="kai_build_setup_install">I-install ang Debian</string>
-    <string name="kai_build_step_download">Dina-download ang Debian… %1$d%%</string>
+    <string name="kai_build_step_download">Dina-download ang Debian… %1$s</string>
     <string name="kai_build_step_extract">Kinukuha ang rootfs…</string>
     <string name="kai_build_step_configure">Kino-configure ang Debian…</string>
     <string name="kai_build_step_base_packages">Ini-install ang base packages…</string>

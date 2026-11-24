@@ -74,4 +74,26 @@ val curatedSkillMarketplaces: List<SkillMarketplace> = listOf(
             "skills/writing-plans",
         ),
     ),
+    // 国内技能商店镜像：托管在 Gitee / 国内 GitHub 镜像站，减少国内用户下载延迟
+    SkillMarketplace(
+        name = "Kai-Next 国内镜像",
+        owner = "DUOFreedom",
+        repo = "Kai-Next-skills-mirror",
+        ref = "main",
+        root = "skills",
+        // 这里只列出通用类技能，避免包含过多平台特定脚本
+        exclude = setOf(
+            "mcp-builder",
+            "skill-creator",
+            "theme-factory",
+            "web-artifacts-builder",
+            "webapp-testing",
+            "internal-comms",
+            "frontend-design",
+            "doc-coauthoring",
+            "canvas-design",
+            "brand-guidelines",
+            "claude-api",
+        ),
+    ),
 )

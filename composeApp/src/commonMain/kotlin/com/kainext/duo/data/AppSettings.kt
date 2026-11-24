@@ -181,6 +181,21 @@ data class ServiceInstance(
 
 class AppSettings(internal val settings: Settings) {
 
+    init {
+        // One-time bump of the tool limits: earlier builds shipped 30 iterations / 4 parallel, and
+        // whoever pressed "restore defaults" then persisted those numbers, which would otherwise
+        // keep pinning them below the new defaults forever.
+        if (!settings.getBoolean(KEY_TOOL_LIMITS_MIGRATED, false)) {
+            if (settings.getInt(KEY_MAX_TOOL_ITERATIONS, -1) == LEGACY_DEFAULT_MAX_TOOL_ITERATIONS) {
+                settings.putInt(KEY_MAX_TOOL_ITERATIONS, DEFAULT_MAX_TOOL_ITERATIONS)
+            }
+            if (settings.getInt(KEY_TOOL_PARALLEL_LIMIT, -1) == LEGACY_DEFAULT_TOOL_PARALLEL_LIMIT) {
+                settings.putInt(KEY_TOOL_PARALLEL_LIMIT, DEFAULT_TOOL_PARALLEL_LIMIT)
+            }
+            settings.putBoolean(KEY_TOOL_LIMITS_MIGRATED, true)
+        }
+    }
+
     // App open tracking
     fun trackAppOpen(): Int {
         val currentCount = settings.getInt(KEY_APP_OPENS, 0)
@@ -194,6 +209,115 @@ class AppSettings(internal val settings: Settings) {
 
     fun setToolEnabled(toolId: String, enabled: Boolean) {
         settings.putBoolean("$KEY_TOOL_PREFIX$toolId", enabled)
+    }
+
+    // Tool loop limits. Both are user-tunable from Settings > Tools so a long
+    // agentic task is not cut off mid-way by a hardcoded ceiling, while a runaway
+    // loop can still be bounded from the UI.
+    fun getMaxToolIterations(): Int = settings
+        .getInt(KEY_MAX_TOOL_ITERATIONS, DEFAULT_MAX_TOOL_ITERATIONS)
+        .coerceIn(MIN_TOOL_ITERATIONS, MAX_TOOL_ITERATIONS_LIMIT)
+
+    fun setMaxToolIterations(iterations: Int) {
+        settings.putInt(KEY_MAX_TOOL_ITERATIONS, iterations.coerceIn(MIN_TOOL_ITERATIONS, MAX_TOOL_ITERATIONS_LIMIT))
+    }
+
+    fun getMaxRepeatedToolCalls(): Int = settings
+        .getInt(KEY_MAX_REPEATED_TOOL_CALLS, DEFAULT_MAX_REPEATED_TOOL_CALLS)
+        .coerceIn(MIN_REPEATED_TOOL_CALLS, MAX_REPEATED_TOOL_CALLS_LIMIT)
+
+    fun setMaxRepeatedToolCalls(repetitions: Int) {
+        settings.putInt(KEY_MAX_REPEATED_TOOL_CALLS, repetitions.coerceIn(MIN_REPEATED_TOOL_CALLS, MAX_REPEATED_TOOL_CALLS_LIMIT))
+    }
+
+    // Whether a tool call pauses for the user's confirmation. Stored by enum name so the stored
+    // value stays readable if the enum order ever changes.
+    fun getToolApprovalPolicy(): ToolApprovalPolicy {
+        val stored = settings.getStringOrNull(KEY_TOOL_APPROVAL_POLICY) ?: return DEFAULT_TOOL_APPROVAL_POLICY
+        return ToolApprovalPolicy.entries.firstOrNull { it.name == stored } ?: DEFAULT_TOOL_APPROVAL_POLICY
+    }
+
+    fun setToolApprovalPolicy(policy: ToolApprovalPolicy) {
+        settings.putString(KEY_TOOL_APPROVAL_POLICY, policy.name)
+    }
+
+    // Tools the user answered "always allow" for. Comma-separated because tool ids never contain
+    // commas, and a Json array here would mean importing a serializer into this settings class for
+    // one field. Survives restarts so the same shell command is not re-confirmed every session.
+    fun getAlwaysAllowedTools(): Set<String> = settings.getStringOrNull(KEY_ALWAYS_ALLOWED_TOOLS).orEmpty()
+        .split(',')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .toSet()
+
+    fun setToolAlwaysAllowed(toolId: String, allowed: Boolean) {
+        val current = getAlwaysAllowedTools().toMutableSet()
+        if (allowed) current.add(toolId) else current.remove(toolId)
+        settings.putString(KEY_ALWAYS_ALLOWED_TOOLS, current.joinToString(","))
+    }
+
+    fun clearAlwaysAllowedTools() {
+        settings.putString(KEY_ALWAYS_ALLOWED_TOOLS, "")
+    }
+
+    // Batch tool calls run in parallel; unbounded fan-out on a phone means a dozen shell probes and
+    // file reads fighting for the same cores and memory, which is slower and can be OOM-killed.
+    fun getToolParallelLimit(): Int = settings.getInt(KEY_TOOL_PARALLEL_LIMIT, DEFAULT_TOOL_PARALLEL_LIMIT)
+        .coerceIn(MIN_TOOL_PARALLEL_LIMIT, MAX_TOOL_PARALLEL_LIMIT)
+
+    fun setToolParallelLimit(limit: Int) {
+        settings.putInt(KEY_TOOL_PARALLEL_LIMIT, limit.coerceIn(MIN_TOOL_PARALLEL_LIMIT, MAX_TOOL_PARALLEL_LIMIT))
+    }
+
+    // The agent's visible to-do lists, one per conversation, serialized as a JSON map. Stored here
+    // rather than in the conversation file so ticking a checkbox does not rewrite chat history.
+    fun getTodosJson(): String? = settings.getStringOrNull(KEY_TODOS)
+
+    fun setTodosJson(json: String) {
+        settings.putString(KEY_TODOS, json)
+    }
+
+    // Long-running goals, one per conversation, serialized as a JSON map. Persisted like the to-do
+    // lists so a restart resumes the same round budget instead of starting over.
+    fun getAgentGoalsJson(): String? = settings.getStringOrNull(KEY_AGENT_GOALS)
+
+    fun setAgentGoalsJson(json: String) {
+        settings.putString(KEY_AGENT_GOALS, json)
+    }
+
+    // Folded context blocks, one list per conversation, serialized as a JSON map. Kept beside the
+    // history rather than inside it: the block holds the text the summary replaced, and the message
+    // list must stay small — that is the whole point of folding.
+    fun getContextFoldsJson(): String? = settings.getStringOrNull(KEY_CONTEXT_FOLDS)
+
+    fun setContextFoldsJson(json: String) {
+        settings.putString(KEY_CONTEXT_FOLDS, json)
+    }
+
+    // Persistent team members (serialized list of Member). Survives restarts and is included in backup/export.
+    fun getMembersJson(): String? = settings.getStringOrNull(KEY_MEMBERS)
+
+    fun setMembersJson(json: String) {
+        settings.putString(KEY_MEMBERS, json)
+    }
+
+    // Team task board (serialized list of TeamTask). Append-only ledger like agent-team.
+    fun getTaskBoardJson(): String? = settings.getStringOrNull(KEY_TASK_BOARD)
+
+    fun setTaskBoardJson(json: String) {
+        settings.putString(KEY_TASK_BOARD, json)
+    }
+
+    // How many autonomous continuation turns a goal may run before it is reported as blocked.
+    fun getGoalMaxRounds(): Int = settings
+        .getInt(KEY_GOAL_MAX_ROUNDS, GoalStore.DEFAULT_MAX_ROUNDS)
+        .coerceIn(GoalStore.MIN_MAX_ROUNDS, GoalStore.MAX_MAX_ROUNDS)
+
+    fun setGoalMaxRounds(rounds: Int) {
+        settings.putInt(
+            KEY_GOAL_MAX_ROUNDS,
+            rounds.coerceIn(GoalStore.MIN_MAX_ROUNDS, GoalStore.MAX_MAX_ROUNDS),
+        )
     }
 
     fun getConversationsJson(): String? = settings.getStringOrNull(KEY_CONVERSATIONS)
@@ -571,6 +695,13 @@ class AppSettings(internal val settings: Settings) {
         settings.putInt("$KEY_MODEL_CONTEXT_PREFIX$modelId", contextTokens)
     }
 
+    // Per-model max output tokens override (0 = not set, use the model's own default)
+    fun getModelMaxOutputTokens(modelId: String): Int = settings.getInt("$KEY_MODEL_MAX_OUTPUT_PREFIX$modelId", 0)
+
+    fun setModelMaxOutputTokens(modelId: String, maxOutputTokens: Int) {
+        settings.putInt("$KEY_MODEL_MAX_OUTPUT_PREFIX$modelId", maxOutputTokens)
+    }
+
     // Model thinking effort
     fun getThinkingEffort(modelId: String): ThinkingEffort {
         val raw = settings.getStringOrNull("$KEY_THINKING_EFFORT_PREFIX$modelId") ?: return ThinkingEffort.MEDIUM
@@ -636,6 +767,30 @@ class AppSettings(internal val settings: Settings) {
         const val KEY_ENCRYPTION_KEY = "encryption_key"
         const val KEY_MIGRATION_COMPLETE = "migration_complete_v1"
         const val KEY_TOOL_PREFIX = "tool_enabled_"
+        const val KEY_MAX_TOOL_ITERATIONS = "max_tool_iterations"
+        const val KEY_MAX_REPEATED_TOOL_CALLS = "max_repeated_tool_calls"
+        const val DEFAULT_MAX_TOOL_ITERATIONS = 100
+        const val DEFAULT_MAX_REPEATED_TOOL_CALLS = 5
+        const val MIN_TOOL_ITERATIONS = 3
+        const val MAX_TOOL_ITERATIONS_LIMIT = 200
+        const val MIN_REPEATED_TOOL_CALLS = 2
+        const val MAX_REPEATED_TOOL_CALLS_LIMIT = 20
+        const val KEY_TOOL_APPROVAL_POLICY = "tool_approval_policy"
+        val DEFAULT_TOOL_APPROVAL_POLICY = ToolApprovalPolicy.HIGH_RISK
+        const val KEY_ALWAYS_ALLOWED_TOOLS = "tool_always_allowed"
+        const val KEY_TOOL_PARALLEL_LIMIT = "tool_parallel_limit"
+        const val DEFAULT_TOOL_PARALLEL_LIMIT = 20
+        const val MIN_TOOL_PARALLEL_LIMIT = 1
+        const val MAX_TOOL_PARALLEL_LIMIT = 32
+        const val KEY_TOOL_LIMITS_MIGRATED = "tool_limits_migrated_v2"
+        private const val LEGACY_DEFAULT_MAX_TOOL_ITERATIONS = 30
+        private const val LEGACY_DEFAULT_TOOL_PARALLEL_LIMIT = 4
+        const val KEY_TODOS = "agent_todos"
+        const val KEY_AGENT_GOALS = "agent_goals"
+        const val KEY_GOAL_MAX_ROUNDS = "goal_max_rounds"
+        const val KEY_CONTEXT_FOLDS = "context_folds"
+        const val KEY_MEMBERS = "team_members"
+        const val KEY_TASK_BOARD = "team_task_board"
         const val KEY_SOUL = "soul_text"
         const val KEY_MEMORY_ENABLED = "memory_enabled"
         const val KEY_MEMORY_INSTRUCTIONS = "memory_instructions"
@@ -688,6 +843,8 @@ class AppSettings(internal val settings: Settings) {
         const val KEY_SPLINTERLANDS_INSTANCE_IDS = "splinterlands_instance_ids"
 
         const val KEY_MODEL_CONTEXT_PREFIX = "model_context_"
+
+        const val KEY_MODEL_MAX_OUTPUT_PREFIX = "model_max_output_"
 
         const val KEY_THINKING_EFFORT_PREFIX = "thinking_effort_"
 

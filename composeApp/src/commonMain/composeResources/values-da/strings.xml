@@ -443,7 +443,7 @@ Hvis noget kræver opmærksomhed (forældede erindringer, forfaldne opgaver, bru
     <string name="kai_build_setup_agents_title">Kodeagenter</string>
     <string name="kai_build_setup_agents_description">Vælg de CLI\'er, der skal installeres på det friske system. Du kan tilføje de andre senere.</string>
     <string name="kai_build_setup_install">Installér Debian</string>
-    <string name="kai_build_step_download">Downloader Debian… %1$d%%</string>
+    <string name="kai_build_step_download">Downloader Debian… %1$s</string>
     <string name="kai_build_step_extract">Udpakker rootfs…</string>
     <string name="kai_build_step_configure">Konfigurerer Debian…</string>
     <string name="kai_build_step_base_packages">Installerer basale pakker…</string>

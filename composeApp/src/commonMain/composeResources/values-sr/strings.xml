@@ -441,7 +441,7 @@
     <string name="kai_build_setup_agents_title">Агенти за кодирање</string>
     <string name="kai_build_setup_agents_description">Изаберите CLI-јеве за инсталацију на свеж систем. Остале можете додати касније.</string>
     <string name="kai_build_setup_install">Инсталирај Debian</string>
-    <string name="kai_build_step_download">Преузимање Debian-а… %1$d%%</string>
+    <string name="kai_build_step_download">Преузимање Debian-а… %1$s</string>
     <string name="kai_build_step_extract">Распакивање rootfs-а…</string>
     <string name="kai_build_step_configure">Конфигурисање Debian-а…</string>
     <string name="kai_build_step_base_packages">Инсталација основних пакета…</string>

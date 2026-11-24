@@ -441,7 +441,7 @@
     <string name="kai_build_setup_agents_title">குறியீட்டு முகவர்கள்</string>
     <string name="kai_build_setup_agents_description">புதிய கணினியில் நிறுவ CLIகளைத் தேர்வு செய்யுங்கள். மற்றவற்றைப் பின்னர் சேர்க்கலாம்.</string>
     <string name="kai_build_setup_install">Debian ஐ நிறுவு</string>
-    <string name="kai_build_step_download">Debian பதிவிறக்கம்… %1$d%%</string>
+    <string name="kai_build_step_download">Debian பதிவிறக்கம்… %1$s</string>
     <string name="kai_build_step_extract">rootfs பிரித்தெடுக்கிறது…</string>
     <string name="kai_build_step_configure">Debian கட்டமைக்கிறது…</string>
     <string name="kai_build_step_base_packages">அடிப்படை தொகுப்புகள் நிறுவுகிறது…</string>

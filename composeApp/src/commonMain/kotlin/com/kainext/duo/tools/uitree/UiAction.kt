@@ -123,5 +123,4 @@ data class UiActionResult(
  * therefore says what was attempted, why it did not work, and what to do instead — e.g.
  * "no node matches 'Save'; screen has 34 nodes, try one of: Save draft, Cancel".
  */
-internal fun failure(message: String, backend: String): UiActionResult =
-    UiActionResult(success = false, backend = backend, message = message, sliceAfter = null)
+internal fun failure(message: String, backend: String): UiActionResult = UiActionResult(success = false, backend = backend, message = message, sliceAfter = null)

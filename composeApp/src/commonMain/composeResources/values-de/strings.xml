@@ -443,7 +443,7 @@ Wenn etwas Aufmerksamkeit erfordert (veraltete Erinnerungen, fällige Aufgaben, 
     <string name="kai_build_setup_agents_title">Coding-Agenten</string>
     <string name="kai_build_setup_agents_description">Wähle die CLIs, die auf dem frischen System installiert werden sollen. Die anderen kannst du später hinzufügen.</string>
     <string name="kai_build_setup_install">Debian installieren</string>
-    <string name="kai_build_step_download">Debian wird heruntergeladen… %1$d%%</string>
+    <string name="kai_build_step_download">Debian wird heruntergeladen… %1$s</string>
     <string name="kai_build_step_extract">Rootfs wird extrahiert…</string>
     <string name="kai_build_step_configure">Debian wird konfiguriert…</string>
     <string name="kai_build_step_base_packages">Basispakete werden installiert…</string>

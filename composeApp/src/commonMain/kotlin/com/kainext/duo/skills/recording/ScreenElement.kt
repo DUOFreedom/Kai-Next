@@ -62,8 +62,7 @@ data class ScreenElement(
     fun contains(x: Int, y: Int): Boolean = x in minX..maxX && y in minY..maxY
 
     /** True when this node exposes anything that could serve as a semantic handle for replay. */
-    fun hasSemanticHandle(): Boolean =
-        !text.isNullOrBlank() || !description.isNullOrBlank() || !resourceId.isNullOrBlank()
+    fun hasSemanticHandle(): Boolean = !text.isNullOrBlank() || !description.isNullOrBlank() || !resourceId.isNullOrBlank()
 }
 
 /**

@@ -8,6 +8,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -24,8 +25,13 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import org.jetbrains.compose.resources.getString
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.seconds
 
 private const val MAX_TOOL_RESULT_LENGTH = 20_000
+
+/** How long a tool call waits for the user to answer the confirmation dialog. */
+private const val APPROVAL_TIMEOUT_SECONDS = 120
 
 /**
  * `{"success": false, "error": message}`, built as JSON rather than by string interpolation —
@@ -37,6 +43,7 @@ internal fun toolErrorJson(message: String): String = buildJsonObject {
 }.toString()
 
 class ToolExecutor(
+    private val appSettings: AppSettings? = null,
     private val toolsProvider: () -> List<Tool> = { getAvailableTools() },
 ) {
 
@@ -55,6 +62,10 @@ class ToolExecutor(
             parseJsonToMap(arguments)
         } catch (e: Exception) {
             return toolErrorJson("Failed to parse arguments: ${e.message}")
+        }
+
+        if (!approvedToRun(name, arguments)) {
+            return toolErrorJson("The user declined to run '$name'. Do not retry it; ask what to do instead.")
         }
 
         return try {
@@ -92,6 +103,43 @@ class ToolExecutor(
     }
 
     private fun truncateResult(result: String): String = result.smartTruncate(MAX_TOOL_RESULT_LENGTH)
+
+    /**
+     * Blocks the tool call until the user allows it, when the configured policy says it must.
+     *
+     * Returns true immediately when nothing gates this tool, which is the common case: the default
+     * policy only stops [ToolRisk.HIGH] tools. When a gate does apply, this suspends for as long as
+     * the user takes to answer — the dialog lives in the chat UI, and cancelling the run resolves
+     * the wait as a denial (see [ToolApprovalController.cancelPending]).
+     */
+    private suspend fun approvedToRun(name: String, arguments: String): Boolean {
+        val settings = appSettings ?: return true
+        // A durable grant is checked before the policy so "always allow" also outranks a later
+        // switch to the noisiest policy; otherwise the same tool would start asking again.
+        if (name in settings.getAlwaysAllowedTools()) return true
+
+        val policy = settings.getToolApprovalPolicy()
+        if (!ToolRiskRegistry.requiresApproval(name, policy)) return true
+
+        val displayName = runCatching { getToolDisplayName(name) }.getOrDefault(name)
+        // Bounded wait: a background run (heartbeat, scheduled task) has no chat screen attached, so
+        // nobody can answer. Without a deadline that coroutine would hang until the user happened
+        // to open the chat, which reads as a frozen assistant.
+        val outcome = withTimeoutOrNull(APPROVAL_TIMEOUT_SECONDS.seconds) {
+            ToolApprovalController.requestApproval(
+                ToolApprovalRequest(
+                    id = "$name-${arguments.hashCode()}-${Clock.System.now().toEpochMilliseconds()}",
+                    toolId = name,
+                    displayName = displayName,
+                    arguments = arguments,
+                    risk = ToolRiskRegistry.riskOf(name),
+                ),
+            )
+        } ?: ToolApprovalOutcome.DENIED
+
+        if (outcome.allowed && outcome.alwaysAllow) settings.setToolAlwaysAllowed(name, true)
+        return outcome.allowed
+    }
 
     private fun anyToJsonElement(value: Any?): JsonElement = when (value) {
         null -> JsonNull

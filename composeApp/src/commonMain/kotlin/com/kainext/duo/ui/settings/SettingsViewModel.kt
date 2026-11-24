@@ -145,6 +145,8 @@ class SettingsViewModel(
         isSdcardAccessEnabled = dataRepository.isSdcardAccessEnabled(),
         isUiAutomationEnabled = dataRepository.isUiAutomationEnabled(),
         canShowOverlay = runCatching { dataRepository.canShowOverlay() }.getOrDefault(false),
+        isScreenCaptureSupported = dataRepository.isScreenCaptureSupported(),
+        isScreenCaptureActive = dataRepository.isScreenCaptureActive(),
         goals = dataRepository.getGoals().toImmutableList(),
     )
 
@@ -173,6 +175,9 @@ class SettingsViewModel(
         onKeepAccessibilityAlive = ::onKeepAccessibilityAlive,
         onToggleOverlay = ::onToggleOverlay,
         onOpenOverlaySettings = ::onOpenOverlaySettings,
+        // Screen capture (MediaProjection)
+        onRequestScreenCapture = ::onRequestScreenCapture,
+        onStopScreenCapture = ::onStopScreenCapture,
         onToggleTool = ::onToggleTool,
         onSaveSoul = ::onSaveSoul,
         onToggleDynamicUi = ::onToggleDynamicUi,
@@ -275,6 +280,15 @@ class SettingsViewModel(
                         localImportError = error,
                     )
                 }
+            }
+        }
+
+        // The projection reports its own start and stop; the consent dialog is answered on the
+        // user's schedule, so polling it after a fixed delay reported "off" whenever they took
+        // longer than the delay to tap Allow.
+        viewModelScope.launch {
+            dataRepository.screenCaptureActive.collect { active ->
+                _state.update { it.copy(isScreenCaptureActive = active) }
             }
         }
     }
@@ -599,6 +613,17 @@ class SettingsViewModel(
             val allowed = runCatching { dataRepository.canShowOverlay() }.getOrDefault(false)
             _state.update { it.copy(canShowOverlay = allowed) }
         }
+    }
+
+    // Screen capture (MediaProjection)
+    private fun onRequestScreenCapture() {
+        // Nothing is guessed here: the switch follows the projection's own state flow, so the
+        // consent dialog can stay open as long as the user needs.
+        dataRepository.requestScreenCapture()
+    }
+
+    private fun onStopScreenCapture() {
+        dataRepository.stopScreenCapture()
     }
 
     private fun onOpenAccessibilitySettings() {

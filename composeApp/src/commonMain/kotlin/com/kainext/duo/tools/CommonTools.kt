@@ -247,6 +247,14 @@ object CommonTools {
         ipLocationToolInfo,
         openUrlToolInfo,
         FetchUrlTool.toolInfo,
+        TodoTools.todoWriteToolInfo,
+        GoalTools.createGoalToolInfo,
+        GoalTools.updateGoalToolInfo,
+        SubagentTools.runSubagentToolInfo,
+        // Reading back what compaction folded away: the other half of context folding.
+        ContextFoldTools.searchContextToolInfo,
+        ContextFoldTools.decompressToolInfo,
+        ContextFoldTools.contextStatusToolInfo,
     ) +
         listOf(memoryStoreToolInfo, memoryForgetToolInfo, memoryLearnToolInfo, memoryReinforceToolInfo) +
         SchedulingTools.schedulingToolDefinitions +

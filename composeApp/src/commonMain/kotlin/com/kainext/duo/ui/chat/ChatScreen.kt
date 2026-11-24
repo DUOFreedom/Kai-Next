@@ -78,19 +78,24 @@ import com.kainext.duo.TerminalLine
 import com.kainext.duo.data.Service
 import com.kainext.duo.data.supportsAgenticFlows
 import com.kainext.duo.getBackgroundDispatcher
+import com.kainext.duo.getPlatformToolDefinitions
 import com.kainext.duo.onDragAndDropEventDropped
 import com.kainext.duo.ui.build.KaiBuildScreen
 import com.kainext.duo.ui.chat.composables.BotMessage
 import com.kainext.duo.ui.chat.composables.ChatHistorySheet
+import com.kainext.duo.ui.chat.composables.ChatStatsBar
 import com.kainext.duo.ui.chat.composables.CircleIconButton
 import com.kainext.duo.ui.chat.composables.EmptyState
 import com.kainext.duo.ui.chat.composables.ErrorMessage
 import com.kainext.duo.ui.chat.composables.FreeProviderSuggestionsPanel
+import com.kainext.duo.ui.chat.composables.GoalCard
 import com.kainext.duo.ui.chat.composables.HeartbeatBanner
-import com.kainext.duo.ui.chat.composables.ChatStatsBar
 import com.kainext.duo.ui.chat.composables.PendingSmsBanners
 import com.kainext.duo.ui.chat.composables.QuestionInput
 import com.kainext.duo.ui.chat.composables.ServiceSelector
+import com.kainext.duo.ui.chat.composables.TeamPlanCard
+import com.kainext.duo.ui.chat.composables.TodoCard
+import com.kainext.duo.ui.chat.composables.ToolApprovalDialog
 import com.kainext.duo.ui.chat.composables.ToolResultCard
 import com.kainext.duo.ui.chat.composables.TopBar
 import com.kainext.duo.ui.chat.composables.TrailingIcon
@@ -130,6 +135,16 @@ import nl.marc_apps.tts.errors.TextToSpeechSynthesisInterruptedError
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
+
+// Answers can drive dozens of tool calls; the inline caption is a glance, not a log, so it keeps
+// only the tail of the run. The overlay still shows every line for the full history.
+private const val MAX_INLINE_OPERATIONS = 6
+
+// Reasoning arrives token by token. A live block that kept every character would keep growing
+// past the bottom edge — the transcript only auto-scrolls when a message is added — so the live
+// view keeps just the tail the user is actually watching. The complete text replaces it as soon
+// as the answer itself starts streaming.
+private const val LIVE_REASONING_CHARS = 240
 
 @Composable
 fun ChatScreen(
@@ -699,43 +714,32 @@ private fun ChatModeScreen(
                                 }
                             }
 
-                            val lastAssistantId = remember(uiState.history) { uiState.history.lastRenderedAssistant()?.id }
+                            val lastAssistantId = rememberLastRenderedAssistantId(uiState.history)
                             // Pair every user submission with its originating assistant so the kai-ui
                             // renders once (on the assistant side) with a frozen snapshot — never as a
                             // separate user-side card. pressedEvent + values persist across the loading
                             // transition; isPending is only set for the latest in-flight submission.
-                            val pairings = remember(uiState.history, uiState.isLoading) {
-                                val history = uiState.history
-                                val lastUserIdx = history.indexOfLast { it.role == History.Role.USER }
-                                val frozen = mutableMapOf<String, FrozenSubmission>()
-                                val userIdByAssistant = mutableMapOf<String, String>()
-                                for ((i, h) in history.withIndex()) {
-                                    if (h.role != History.Role.USER) continue
-                                    val sub = h.uiSubmission ?: continue
-                                    val originId = (i - 1 downTo 0).firstNotNullOfOrNull { j ->
-                                        history[j].takeIf {
-                                            it.role == History.Role.ASSISTANT &&
-                                                it.content.isNotEmpty() && !it.isThinking &&
-                                                it.content == sub.sourceContent
-                                        }?.id
-                                    } ?: (i - 1 downTo 0).firstNotNullOfOrNull { j ->
-                                        history[j].takeIf {
-                                            it.role == History.Role.ASSISTANT &&
-                                                it.content.isNotEmpty() && !it.isThinking
-                                        }?.id
-                                    } ?: continue
-                                    frozen[originId] = FrozenSubmission(
-                                        values = sub.values,
-                                        pressedEvent = sub.pressedEvent,
-                                        isPending = uiState.isLoading && i == lastUserIdx,
-                                    )
-                                    userIdByAssistant[originId] = h.id
-                                }
-                                frozen.toMap() to userIdByAssistant.toMap()
-                            }
+                            val pairings = rememberSubmissionPairings(uiState.history, uiState.isLoading)
                             val frozenByAssistantId = pairings.first
                             val userIdByAssistantId = pairings.second
                             val executingToolsState = rememberExecutingTools(uiState.history)
+
+                            // Hoisted out of the list so the scroll effect below can use the same
+                            // condition the list uses; the waiting row is appended after the
+                            // transcript and would otherwise sit just below the viewport.
+                            val showWaitingRow = uiState.isLoading &&
+                                (frozenByAssistantId.values.none { it.isPending } || executingToolsState.tools.isNotEmpty())
+
+                            // The effect above stops at the last message, but the waiting row and the
+                            // error row are appended after it. A turn that had started without
+                            // producing any text yet therefore looked like a frozen screen: the only
+                            // progress indicator was rendered one row past the bottom edge. Pull it
+                            // into view when a request begins.
+                            LaunchedEffect(uiState.isLoading) {
+                                if (showWaitingRow) {
+                                    listState.requestScrollToItem(uiState.history.size)
+                                }
+                            }
 
                             val fallbackStatusText = uiState.fallbackStatus?.let { status ->
                                 val failed = stringResource(Res.string.fallback_service_failed, status.serviceName, uiErrorText(status.errorReason))
@@ -747,61 +751,13 @@ private fun ChatModeScreen(
                             // thinking-only turns plus the final answer's own reasoning) under the
                             // answer-bearing assistant message, so each response shows a single
                             // collapsible "Thinking" section instead of N standalone ones.
-                            val (reasoningSegmentsByAssistantId, suppressedThinkingIds) = remember(uiState.history) {
-                                val byAnswerId = mutableMapOf<String, ImmutableList<String>>()
-                                val suppressed = mutableSetOf<String>()
-                                val pending = mutableListOf<String>()
-                                val pendingThinkingIds = mutableListOf<String>()
-                                for (entry in uiState.history) {
-                                    when {
-                                        entry.role == History.Role.USER -> {
-                                            pending.clear()
-                                            pendingThinkingIds.clear()
-                                        }
+                            val (reasoningSegmentsByAssistantId, suppressedThinkingIds) = rememberReasoningByAssistant(uiState.history)
 
-                                        entry.role == History.Role.ASSISTANT &&
-                                            entry.isThinking &&
-                                            entry.content.isNotEmpty() -> {
-                                            pending.add(entry.content)
-                                            pendingThinkingIds.add(entry.id)
-                                        }
-
-                                        entry.role == History.Role.ASSISTANT &&
-                                            !entry.isThinking &&
-                                            entry.content.isNotEmpty() -> {
-                                            val combined = buildList {
-                                                addAll(pending)
-                                                entry.reasoningContent?.takeIf { it.isNotBlank() }?.let { add(it) }
-                                            }
-                                            if (combined.isNotEmpty()) byAnswerId[entry.id] = combined.toImmutableList()
-                                            suppressed.addAll(pendingThinkingIds)
-                                            pending.clear()
-                                            pendingThinkingIds.clear()
-                                        }
-
-                                        entry.role == History.Role.ASSISTANT &&
-                                            entry.toolCalls != null -> {
-                                            // Assistant turn with tool calls but no answer text yet —
-                                            // capture its reasoning, attach to the eventual answer.
-                                            entry.reasoningContent
-                                                ?.takeIf { it.isNotBlank() }
-                                                ?.let { pending.add(it) }
-                                        }
-                                    }
-                                }
-                                // In-flight: the user is still waiting for the answer but earlier
-                                // thinking turns are already in history. Collapse them into the most
-                                // recent thinking entry so the user sees ONE growing Thinking section
-                                // instead of a separate bubble per tool-loop iteration.
-                                if (pendingThinkingIds.isNotEmpty()) {
-                                    val lastId = pendingThinkingIds.last()
-                                    byAnswerId[lastId] = pending.toImmutableList()
-                                    for (i in 0 until pendingThinkingIds.size - 1) {
-                                        suppressed.add(pendingThinkingIds[i])
-                                    }
-                                }
-                                byAnswerId to suppressed
-                            }
+                            // Which tools each reply actually ran, in order. Walking the
+                            // transcript is the only honest source: the tool list is assembled per
+                            // model call, so it is not knowable from the reply text alone.
+                            val toolNamesById = remember { getPlatformToolDefinitions().associate { it.id to it.name } }
+                            val operationsByAssistantId = rememberOperationsByAssistant(uiState.history, toolNamesById)
 
                             val showScrollToBottom by remember {
                                 derivedStateOf {
@@ -854,7 +810,7 @@ private fun ChatModeScreen(
                                                         },
                                                         reasoningSegments = reasoningSegmentsByAssistantId[history.id] ?: persistentListOf(),
                                                         tokenUsage = history.tokenUsage,
-                                                        contextWindow = uiState.availableServices.firstOrNull()?.contextWindow,
+                                                        operations = operationsByAssistantId[history.id] ?: persistentListOf(),
                                                     )
                                                     if (history.fallbackServiceName != null) {
                                                         androidx.compose.material3.Text(
@@ -878,6 +834,24 @@ private fun ChatModeScreen(
                                                         setIsSpeaking = {},
                                                         reasoningSegments = reasoningSegmentsByAssistantId[history.id]
                                                             ?: persistentListOf(history.content),
+                                                    )
+                                                } else if (history.content.isEmpty() &&
+                                                    !history.reasoningContent.isNullOrBlank()
+                                                ) {
+                                                    // Reasoning tokens are streaming in but no answer text has
+                                                    // arrived yet. Without this branch the entry matches nothing and
+                                                    // the turn renders as pure silence — the user sees the model is
+                                                    // "thinking" with no sign of progress. Render the reasoning as it
+                                                    // grows, expanded, so the work is visible rather than inferred.
+                                                    BotMessage(
+                                                        message = "",
+                                                        textToSpeech = null,
+                                                        isSpeaking = false,
+                                                        setIsSpeaking = {},
+                                                        reasoningSegments = persistentListOf(
+                                                            history.reasoningContent.trim().takeLast(LIVE_REASONING_CHARS),
+                                                        ),
+                                                        isReasoningLive = history.id == uiState.history.lastOrNull()?.id,
                                                     )
                                                 }
                                             }
@@ -903,8 +877,6 @@ private fun ChatModeScreen(
                                     // Skip the generic "thinking" row during a pending kai-ui submission — the
                                     // pressed button's pulse already signals work in flight. Keep it for tool
                                     // activity so tool feedback isn't lost.
-                                    val showWaitingRow = uiState.isLoading &&
-                                        (frozenByAssistantId.values.none { it.isPending } || executingToolsState.tools.isNotEmpty())
                                     if (showWaitingRow) {
                                         item(key = "loading") {
                                             WaitingResponseRow(
@@ -976,12 +948,32 @@ private fun ChatModeScreen(
                     onChangeThinkingEffort = uiState.actions.changeThinkingEffort,
                     installedSkills = uiState.installedSkills,
                 )
+                if (uiState.isTeamMode || uiState.teamPlan.isNotEmpty()) {
+                    TeamPlanCard(
+                        plan = uiState.teamPlan,
+                        results = uiState.teamResults,
+                        summary = uiState.teamSummary,
+                        isRunning = uiState.isTeamRunning,
+                        instruction = uiState.teamInstruction,
+                    )
+                }
+                uiState.goal?.let { goal ->
+                    GoalCard(goal = goal, onSetStatus = uiState.actions.setGoalStatus)
+                }
+                if (uiState.todos.isNotEmpty()) {
+                    TodoCard(
+                        todos = uiState.todos,
+                        onToggle = uiState.actions.toggleTodo,
+                    )
+                }
                 ChatStatsBar(
                     totalTokens = uiState.totalTokens,
                     rounds = uiState.rounds,
                     steps = uiState.steps,
                     tokenUsage = uiState.latestTokenUsage,
-                    contextWindow = uiState.availableServices.firstOrNull()?.contextWindow,
+                    contextWindow = uiState.contextWindow,
+                    isTeamMode = uiState.isTeamMode,
+                    onToggleTeamMode = uiState.actions.toggleTeamMode,
                     // Offered only while a turn is running: the window exists to watch the agent
                     // work, so outside a run there is nothing for it to show.
                     onShowOverlay = uiState.actions.showOverlay.takeIf { uiState.isLoading },
@@ -994,6 +986,11 @@ private fun ChatModeScreen(
         ) { data ->
             Snackbar(snackbarData = data)
         }
+        ToolApprovalDialog(
+            request = uiState.pendingToolApproval,
+            onRespond = uiState.actions.respondToToolApproval,
+            onAlwaysAllow = uiState.actions.alwaysAllowPendingTool,
+        )
     }
 
     if (showHistorySheet) {
@@ -1012,6 +1009,187 @@ private data class ExecutingToolsState(
     val tools: ImmutableList<Pair<String, String>>,
     val isStatusOnly: Boolean,
 )
+
+/**
+ * Id of the assistant message currently being rendered as "the answer", or null while the reply is
+ * still a thinking/tool-only turn.
+ *
+ * Streaming rewrites the placeholder's content on every emit, which changes [history] without
+ * changing this id. Wrapping the lookup in [derivedStateOf] means the transcript does not re-read it
+ * per emit — the same reason [rememberExecutingTools] exists.
+ */
+@Composable
+private fun rememberLastRenderedAssistantId(history: ImmutableList<History>): String? {
+    val historyState = rememberUpdatedState(history)
+    val id by remember { derivedStateOf { historyState.value.lastRenderedAssistant()?.id } }
+    return id
+}
+
+/**
+ * Pairs each interactive-mode submission with the assistant turn that answered it, so the frozen
+ * kai-ui snapshot renders on the assistant side only.
+ *
+ * Returns `frozenByAssistantId to userIdByAssistantId`. Both maps are compared by content, so the
+ * surrounding composable only recomposes when a pairing actually appears or its pending flag flips —
+ * not on every streamed token.
+ */
+@Composable
+private fun rememberSubmissionPairings(
+    history: ImmutableList<History>,
+    isLoading: Boolean,
+): Pair<Map<String, FrozenSubmission>, Map<String, String>> {
+    val historyState = rememberUpdatedState(history)
+    val loadingState = rememberUpdatedState(isLoading)
+    val pairings by remember {
+        derivedStateOf {
+            val current = historyState.value
+            val loading = loadingState.value
+            val lastUserIdx = current.indexOfLast { it.role == History.Role.USER }
+            val frozen = mutableMapOf<String, FrozenSubmission>()
+            val userIdByAssistant = mutableMapOf<String, String>()
+            for ((i, h) in current.withIndex()) {
+                if (h.role != History.Role.USER) continue
+                val sub = h.uiSubmission ?: continue
+                // Match on the submitted content first (the same prompt asked twice must not pair
+                // with the wrong answer), then fall back to the nearest preceding answer.
+                val originId = (i - 1 downTo 0).firstNotNullOfOrNull { j ->
+                    current[j].takeIf {
+                        it.role == History.Role.ASSISTANT &&
+                            it.content.isNotEmpty() && !it.isThinking &&
+                            it.content == sub.sourceContent
+                    }?.id
+                } ?: (i - 1 downTo 0).firstNotNullOfOrNull { j ->
+                    current[j].takeIf {
+                        it.role == History.Role.ASSISTANT &&
+                            it.content.isNotEmpty() && !it.isThinking
+                    }?.id
+                } ?: continue
+                frozen[originId] = FrozenSubmission(
+                    values = sub.values,
+                    pressedEvent = sub.pressedEvent,
+                    isPending = loading && i == lastUserIdx,
+                )
+                userIdByAssistant[originId] = h.id
+            }
+            frozen.toMap() to userIdByAssistant.toMap()
+        }
+    }
+    return pairings
+}
+
+/**
+ * Reasoning segments grouped under the answer they belong to, plus the thinking turns that should be
+ * hidden because their content already shows inside that group.
+ *
+ * A response can span several thinking-only turns and tool-call turns before the final answer, and
+ * every one of them is a separate transcript entry. Grouping them here is what lets the UI show a
+ * single collapsible "Thinking" section per response instead of one bubble per tool-loop iteration.
+ */
+@Composable
+private fun rememberReasoningByAssistant(
+    history: ImmutableList<History>,
+): Pair<Map<String, ImmutableList<String>>, Set<String>> {
+    val historyState = rememberUpdatedState(history)
+    val grouped by remember {
+        derivedStateOf {
+            val byAnswerId = mutableMapOf<String, ImmutableList<String>>()
+            val suppressed = mutableSetOf<String>()
+            val pending = mutableListOf<String>()
+            val pendingThinkingIds = mutableListOf<String>()
+            for (entry in historyState.value) {
+                when {
+                    entry.role == History.Role.USER -> {
+                        pending.clear()
+                        pendingThinkingIds.clear()
+                    }
+
+                    entry.role == History.Role.ASSISTANT &&
+                        entry.isThinking &&
+                        entry.content.isNotEmpty() -> {
+                        pending.add(entry.content)
+                        pendingThinkingIds.add(entry.id)
+                    }
+
+                    entry.role == History.Role.ASSISTANT &&
+                        !entry.isThinking &&
+                        entry.content.isNotEmpty() -> {
+                        val combined = buildList {
+                            addAll(pending)
+                            entry.reasoningContent?.takeIf { it.isNotBlank() }?.let { add(it) }
+                        }
+                        if (combined.isNotEmpty()) byAnswerId[entry.id] = combined.toImmutableList()
+                        suppressed.addAll(pendingThinkingIds)
+                        pending.clear()
+                        pendingThinkingIds.clear()
+                    }
+
+                    entry.role == History.Role.ASSISTANT &&
+                        entry.toolCalls != null -> {
+                        // Assistant turn with tool calls but no answer text yet — capture its
+                        // reasoning, attach to the eventual answer.
+                        entry.reasoningContent
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { pending.add(it) }
+                    }
+                }
+            }
+            // In-flight: the user is still waiting for the answer but earlier thinking turns are
+            // already in history. Collapse them into the most recent thinking entry so the user sees
+            // ONE growing Thinking section instead of a separate bubble per tool-loop iteration.
+            if (pendingThinkingIds.isNotEmpty()) {
+                val lastId = pendingThinkingIds.last()
+                byAnswerId[lastId] = pending.toImmutableList()
+                for (i in 0 until pendingThinkingIds.size - 1) {
+                    suppressed.add(pendingThinkingIds[i])
+                }
+            }
+            byAnswerId to suppressed.toSet()
+        }
+    }
+    return grouped
+}
+
+/**
+ * Which tools each reply actually ran, in order, capped at [MAX_INLINE_OPERATIONS].
+ *
+ * Walking the transcript is the only honest source: the tool list is assembled per model call, so it
+ * is not knowable from the reply text alone.
+ */
+@Composable
+private fun rememberOperationsByAssistant(
+    history: ImmutableList<History>,
+    toolNamesById: Map<String, String>,
+): Map<String, ImmutableList<String>> {
+    val historyState = rememberUpdatedState(history)
+    val namesState = rememberUpdatedState(toolNamesById)
+    val operations by remember {
+        derivedStateOf {
+            val names = namesState.value
+            val byAnswerId = mutableMapOf<String, ImmutableList<String>>()
+            val pending = mutableListOf<String>()
+            for (entry in historyState.value) {
+                when {
+                    entry.role == History.Role.USER -> pending.clear()
+
+                    entry.role == History.Role.TOOL -> {
+                        entry.toolName?.let { id -> pending.add(names[id] ?: id) }
+                    }
+
+                    entry.role == History.Role.ASSISTANT &&
+                        !entry.isThinking &&
+                        entry.content.isNotEmpty() -> {
+                        if (pending.isNotEmpty()) {
+                            byAnswerId[entry.id] = pending.takeLast(MAX_INLINE_OPERATIONS).toImmutableList()
+                        }
+                        pending.clear()
+                    }
+                }
+            }
+            byAnswerId
+        }
+    }
+    return operations
+}
 
 @Composable
 private fun rememberExecutingTools(history: ImmutableList<History>): ExecutingToolsState {

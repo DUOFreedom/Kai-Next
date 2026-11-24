@@ -20,6 +20,9 @@
    <!-- Floating control window shown while the assistant operates the device. -->
    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+   <!-- Screen capture: the projection has to be held by a foreground service of this exact type
+        from Android 14 on, and the type needs its own permission from Android 14 on. -->
+   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
    <!-- Personal context: photo library (android_context → photos_recent). Partial access on
         Android 14+ is enough — the tool reports whatever the user shared. -->
    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
@@ -30,6 +33,18 @@
    <uses-permission
        android:name="android.permission.PACKAGE_USAGE_STATS"
        tools:ignore="ProtectedPermissions"/>
+   <!-- Eta (GPL-3.0) personal context tools: contacts, SMS, call logs -->
+   <uses-permission android:name="android.permission.READ_CONTACTS"/>
+   <uses-permission android:name="android.permission.READ_SMS"/>
+   <uses-permission android:name="android.permission.READ_CALL_LOG"/>
+   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+   <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+   <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/>
+   <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+   <uses-permission android:name="android.permission.NFC"/>
+   <uses-permission android:name="android.permission.CAMERA"/>
+   <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
     <application
         android:name="com.kainext.duo.KaiApplication"
@@ -101,6 +116,13 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="floating control window for AI device automation" />
         </service>
+        <!-- Screen capture. Holds the MediaProjection and mirrors the display into an ImageReader
+             so frames can be read on demand while the assistant drives other apps. The system
+             consent dialog is the gate; nothing is captured before the user accepts it. -->
+        <service
+            android:name="com.kainext.duo.capture.ScreenCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
         <!-- Device control: third privilege mode alongside root and Shizuku. Reads the live node
              tree and dispatches gestures, so taps land on the intended control instead of guessed
              coordinates. The system binds this only after the user enables it in Accessibility

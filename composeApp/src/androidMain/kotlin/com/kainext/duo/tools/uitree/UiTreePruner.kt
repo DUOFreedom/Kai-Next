@@ -87,7 +87,10 @@ class UiTreePruner(
     suspend fun snapshot(): UiTreeSnapshot? = withContext(Dispatchers.Main.immediate) {
         try {
             val service = KaiAccessibilityService.current() ?: return@withContext null
-            val root = service.activeRoot() ?: return@withContext null
+            // Snapshot the app the user is looking at, not the topmost window: Kai's chat
+            // overlay is focused whenever it is visible, so `activeRoot()` would hand the agent
+            // a picture of its own narration instead of the target screen.
+            val root = service.foregroundAppRoot() ?: return@withContext null
             prune(root)
         } catch (e: CancellationException) {
             throw e

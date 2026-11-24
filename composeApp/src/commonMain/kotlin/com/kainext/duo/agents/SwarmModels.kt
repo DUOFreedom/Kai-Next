@@ -106,7 +106,9 @@ data class SwarmResult(
         val failed = stepResults.count { it.status == StepStatus.FAILED }
         return when {
             timedOut -> "Stopped after timing out — $done/${stepResults.size} steps completed."
+
             success -> "Completed $done/${stepResults.size} steps."
+
             else -> buildString {
                 append("$done/${stepResults.size} steps completed")
                 if (failed > 0) append(", $failed failed")

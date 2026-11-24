@@ -16,10 +16,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -121,7 +121,10 @@ internal fun GoalsContent(
                     )
                 }
                 OutlinedButton(
-                    onClick = { editing = null; showEditor = true },
+                    onClick = {
+                        editing = null
+                        showEditor = true
+                    },
                     modifier = Modifier.handCursor(),
                 ) {
                     Text(stringResource(Res.string.settings_goals_add))
@@ -158,7 +161,10 @@ internal fun GoalsContent(
                 uiState.goals.forEach { goal ->
                     GoalCard(
                         goal = goal,
-                        onEdit = { editing = goal; showEditor = true },
+                        onEdit = {
+                            editing = goal
+                            showEditor = true
+                        },
                         onDelete = { actions.onDeleteGoal(goal.id) },
                         onTogglePlan = { planId ->
                             actions.onUpdateGoal(togglePlan(goal, planId))
@@ -175,7 +181,10 @@ internal fun GoalsContent(
     if (showEditor) {
         GoalEditorDialog(
             initial = editing,
-            onDismiss = { showEditor = false; editing = null },
+            onDismiss = {
+                showEditor = false
+                editing = null
+            },
             onSave = { goal ->
                 if (editing == null) actions.onAddGoal(goal) else actions.onUpdateGoal(goal)
                 showEditor = false
@@ -318,7 +327,7 @@ private fun GoalCard(
             Spacer(Modifier.height(4.dp))
             Row {
                 Text(
-                    text = stringResource(Res.string.settings_goals_progress, goal.completionPercent),
+                    text = stringResource(Res.string.settings_goals_progress, "${goal.completionPercent}%"),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -428,7 +437,10 @@ private fun GoalEditorDialog(
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = title,
-                    onValueChange = { title = it; showTitleError = false },
+                    onValueChange = {
+                        title = it
+                        showTitleError = false
+                    },
                     label = { Text(stringResource(Res.string.settings_goals_title_label)) },
                     singleLine = true,
                     isError = showTitleError,

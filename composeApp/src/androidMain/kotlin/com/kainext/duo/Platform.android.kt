@@ -11,12 +11,17 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.core.graphics.scale
 import androidx.core.net.toUri
 import com.kainext.duo.data.AppSettings
+import com.kainext.duo.data.ContextFoldStore
+import com.kainext.duo.data.DataRepository
 import com.kainext.duo.data.EmailStore
+import com.kainext.duo.data.GoalStore
 import com.kainext.duo.data.MemoryStore
 import com.kainext.duo.data.NotificationStore
 import com.kainext.duo.data.SmsDraftStore
 import com.kainext.duo.data.SmsStore
 import com.kainext.duo.data.TaskStore
+import com.kainext.duo.data.TodoStore
+import com.kainext.duo.data.ToolExecutor
 import com.kainext.duo.mcp.McpServerManager
 import com.kainext.duo.network.tools.Tool
 import com.kainext.duo.network.tools.ToolInfo
@@ -49,6 +54,7 @@ import com.kainext.duo.tools.SetAlarmTool
 import com.kainext.duo.tools.ShellCommandTool
 import com.kainext.duo.tools.SmsTools
 import com.kainext.duo.tools.SshConfigureHostTool
+import com.kainext.duo.tools.SubagentTools
 import com.kainext.duo.tools.buildAgentToolSet
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.SharedPreferencesSettings
@@ -202,12 +208,18 @@ actual fun getAvailableTools(): List<Tool> {
     val taskStore: TaskStore by inject(TaskStore::class.java)
     val emailStore: EmailStore by inject(EmailStore::class.java)
     val mcpServerManager: McpServerManager by inject(McpServerManager::class.java)
+    val todoStore: TodoStore by inject(TodoStore::class.java)
+    val goalStore: GoalStore by inject(GoalStore::class.java)
+    val contextFoldStore: ContextFoldStore by inject(ContextFoldStore::class.java)
 
     return buildAgentToolSet(
         appSettings = appSettings,
         memoryStore = memoryStore,
         taskStore = taskStore,
         mcpServerManager = mcpServerManager,
+        todoStore = todoStore,
+        goalStore = goalStore,
+        contextFoldStore = contextFoldStore,
         emailStore = emailStore,
     ) {
         if (appSettings.isToolEnabled(SendNotificationTool.ID)) {
@@ -257,6 +269,20 @@ actual fun getAvailableTools(): List<Tool> {
             // Personal context: clipboard, photos, usage. Needs no shell, but it does read
             // device data, so it follows the same master switch as the rest of device control.
             add(AndroidContextTool())
+        }
+
+        // Subagent: a side errand that keeps its own work log and reports only a conclusion.
+        // Registered after everything above so the child inherits the real tool family the user has
+        // enabled; SubagentTools filters this tool itself out, which is what bounds the tree.
+        if (appSettings.isToolEnabled(SubagentTools.TOOL_ID)) {
+            addAll(
+                SubagentTools.getSubagentTools(
+                    appSettings = appSettings,
+                    toolExecutor = { KoinJavaComponent.get(ToolExecutor::class.java) },
+                    dataRepository = { KoinJavaComponent.get(DataRepository::class.java) },
+                    toolsProvider = { getAvailableTools() },
+                ),
+            )
         }
 
         // SMS read tools: triple-gated. `isSmsSupported` is only true on FOSS builds

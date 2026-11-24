@@ -42,7 +42,6 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.kainext.duo.data.TokenUsage
-import com.kainext.duo.formatContextWindow
 import com.kainext.duo.getBackgroundDispatcher
 import com.kainext.duo.ui.dynamicui.FrozenSubmission
 import com.kainext.duo.ui.dynamicui.toSpeakableText
@@ -85,7 +84,8 @@ internal fun BotMessage(
     onResubmit: ((event: String, data: Map<String, String>) -> Unit)? = null,
     reasoningSegments: ImmutableList<String> = persistentListOf(),
     tokenUsage: TokenUsage? = null,
-    contextWindow: Long? = null,
+    operations: ImmutableList<String> = persistentListOf(),
+    isReasoningLive: Boolean = false,
 ) {
     val document = remember(message) { parseMarkdown(message) }
     var isEditing by remember(frozen) { mutableStateOf(false) }
@@ -108,6 +108,7 @@ internal fun BotMessage(
             if (nonBlankSegments.isNotEmpty()) {
                 ReasoningBlockquote(
                     segments = nonBlankSegments,
+                    isLive = isReasoningLive,
                     modifier = Modifier.fillMaxWidth()
                         .padding(start = 16.dp, top = 12.dp, end = 16.dp),
                 )
@@ -126,6 +127,18 @@ internal fun BotMessage(
                             .padding(start = 16.dp, top = answerTopPadding, end = 16.dp, bottom = 8.dp),
                     )
                 }
+            }
+            if (operations.isNotEmpty()) {
+                // What this turn actually did, in the smallest type on screen: the reply says
+                // "I opened QQ", this line says which taps produced that.
+                Text(
+                    text = operations.joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                )
             }
         }
         if (frozen != null && onResubmit != null) {
@@ -204,9 +217,6 @@ internal fun BotMessage(
         Spacer(Modifier.weight(1f))
     }
     tokenUsage?.let { usage ->
-        val contextPercent = contextWindow?.takeIf { it > 0 }?.let { window ->
-            (usage.totalTokens * 100.0 / window).coerceIn(0.0, 100.0)
-        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -220,13 +230,10 @@ internal fun BotMessage(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.width(4.dp))
-            val tokenText = "Tokens: ${usage.promptTokens}+${usage.completionTokens}=${usage.totalTokens}"
-            val contextText = contextPercent?.let { percent ->
-                val pct = if (percent < 1 && percent > 0) "<1" else percent.toInt().toString()
-                " · Context: ${formatContextWindow(contextWindow ?: 0)} ($pct%)"
-            }.orEmpty()
+            // Context usage is reported once, by the stats bar — a second percentage under every
+            // reply only repeated the same number in a weaker position.
             Text(
-                text = tokenText + contextText,
+                text = "Tokens: ${usage.promptTokens}+${usage.completionTokens}=${usage.totalTokens}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -237,9 +244,14 @@ internal fun BotMessage(
 @Composable
 private fun ReasoningBlockquote(
     segments: ImmutableList<String>,
+    isLive: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    // While reasoning is still streaming in the user is watching the text arrive, so
+    // the transcript stays open on its own; it collapses back to the one-line preview
+    // once the answer starts. A manual expand is honoured either way.
+    val isExpanded = expanded || isLive
     // Preview always reflects the MOST RECENT thinking segment so the user gets a
     // visual update each time a new reasoning phase starts, without expanding.
     val preview = remember(segments) {

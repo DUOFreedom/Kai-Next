@@ -3,13 +3,18 @@
 package com.kainext.duo.ui.chat
 
 import androidx.compose.runtime.Immutable
+import com.kainext.duo.agents.PlanStep
+import com.kainext.duo.agents.StepResult
+import com.kainext.duo.data.AgentGoal
 import com.kainext.duo.data.Attachment
 import com.kainext.duo.data.FallbackStatus
 import com.kainext.duo.data.ReasoningRequestMode
 import com.kainext.duo.data.ServiceEntry
 import com.kainext.duo.data.SharedJson
 import com.kainext.duo.data.SmsDraft
+import com.kainext.duo.data.TodoItem
 import com.kainext.duo.data.TokenUsage
+import com.kainext.duo.data.ToolApprovalRequest
 import com.kainext.duo.data.UiSubmission
 import com.kainext.duo.network.UiError
 import com.kainext.duo.network.dtos.gemini.GeminiChatRequestDto
@@ -99,6 +104,33 @@ data class ChatUiState(
     val rounds: Int = 0,
     /** Number of tool executions performed in this conversation. */
     val steps: Int = 0,
+    /**
+     * Real context window of the model that will answer the next turn, resolved from the model
+     * catalog rather than assumed: free-mode and on-device models differ by an order of magnitude,
+     * so a hardcoded figure makes the usage percentage meaningless.
+     */
+    val contextWindow: Long? = null,
+    /** Whether the next turn goes through the swarm (planner + workers) instead of one model. */
+    val isTeamMode: Boolean = false,
+    /** Plan produced for the running team turn; empty when not in team mode. */
+    val teamPlan: ImmutableList<PlanStep> = persistentListOf(),
+    /** Steps that already finished, keyed by step id so the plan can be rendered with statuses. */
+    val teamResults: ImmutableList<StepResult> = persistentListOf(),
+    /**
+     * The request this run is planning for. Team turns do not go through the chat history, so the
+     * card has to carry the instruction itself — otherwise the question the user typed vanishes.
+     */
+    val teamInstruction: String = "",
+    /** Run summary (or the reason it stopped early), shown under the plan. */
+    val teamSummary: String = "",
+    val isTeamRunning: Boolean = false,
+    /** The agent's task list for this conversation, rendered above the stats bar. */
+    val todos: ImmutableList<TodoItem> = persistentListOf(),
+    /** A tool call waiting for the user's go-ahead; null when nothing is gated. */
+    val pendingToolApproval: ToolApprovalRequest? = null,
+    // The long-running objective of this conversation, if the agent started one. Rendered above the
+    // todo card so the user sees what the agent is spending autonomous rounds on.
+    val goal: AgentGoal? = null,
 ) {
     val heartbeatConversationId: String?
         get() = savedConversations.firstOrNull { it.isHeartbeat }?.id

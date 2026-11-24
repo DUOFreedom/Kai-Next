@@ -392,8 +392,7 @@ class UiTreeShellFallback(
             .replace("&amp;", "&")
     }
 
-    private fun clip(value: String): String =
-        if (value.length <= MAX_LABEL_CHARS) value else value.take(MAX_LABEL_CHARS) + "…"
+    private fun clip(value: String): String = if (value.length <= MAX_LABEL_CHARS) value else value.take(MAX_LABEL_CHARS) + "…"
 
     /** Result of a dump, exposed for callers that want the raw text (debugging, recordings). */
     suspend fun rawDump(): PrivilegedResult = shell.execute(
